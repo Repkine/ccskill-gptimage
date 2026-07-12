@@ -253,6 +253,16 @@ Each image is saved alongside a **metadata JSON sidecar** (`{name}.{ext}.json`) 
 
 `revised_prompt`: gpt-image-2 may return a paraphrased prompt. This skill prints it as `[Revised] ...` and saves it to the sidecar. Use it as a signal to refine follow-up prompts.
 
+## Browsing generated images
+
+Every image is also copied into a shared gallery store (`~/.ccskill-gptimage/gallery`, override with `CCSKILL_GPTIMAGE_GALLERY_DIR`) alongside `ccskill-nanobanana` and `ccskill-omniflash` output. Install [ccskill-gallery](https://github.com/feedtailor/ccskill-gallery) and run:
+
+```bash
+ccskill-gptimage browse
+```
+
+This delegates to `ccskill-gallery browse` (`--port`/`--bind`/`--no-open` pass through). Without ccskill-gallery installed, it just prints where the images are stored.
+
 ## Troubleshooting
 
 - **Not sure what's wrong?** → run `ccskill-gptimage doctor` for a quick environment + backend diagnosis (it never reads secret files; reports are presence-based)

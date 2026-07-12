@@ -41,6 +41,8 @@ Usage: ccskill-gptimage <command> [args...]
 
 Commands:
   generate <prompt> [options...]   Generate / edit an image (generate_image.py)
+  browse [--port N] [--bind ADDR] [--no-open]
+                                    Browse generated images via ccskill-gallery
   doctor                           Diagnose environment and backends (no secrets read)
   uninstall                        Remove symlinks (~/.local/bin, ~/.claude/skills)
   version                          Show version
@@ -50,6 +52,7 @@ Examples:
   ccskill-gptimage generate "a minimalist fox logo, flat vector"
   ccskill-gptimage generate "make the sky golden hour" --reference photo.png
   ccskill-gptimage generate --help
+  ccskill-gptimage browse
 
 Version: $VERSION
 Master:  $CCSKILL_GPTIMAGE_DIR
@@ -66,6 +69,23 @@ cmd_generate() {
         exit 1
     fi
     exec "$PYTHON" "$CCSKILL_GPTIMAGE_DIR/generate_image.py" "$@"
+}
+
+# browse: 閲覧UIは自前実装せず ccskill-gallery へ委譲する(issue #024)。
+# 生成物のストア書き込みは generate_image.py が既に store-spec 準拠で行っている。
+# 未導入時はエラーにせず(exit 0)案内のみ表示する。
+cmd_browse() {
+    if command -v ccskill-gallery > /dev/null 2>&1; then
+        exec ccskill-gallery browse "$@"
+    fi
+
+    local gallery_dir="${CCSKILL_GPTIMAGE_GALLERY_DIR:-$HOME/.ccskill-gptimage/gallery}"
+    echo "ccskill-gallery is not installed, so images can't be browsed yet."
+    echo "Install it to browse everything ccskill-* has generated in one place:"
+    echo "  https://github.com/feedtailor/ccskill-gallery"
+    echo ""
+    echo "Your generated images are stored at: $gallery_dir"
+    exit 0
 }
 
 # doctor: 環境と backend を診断する。
@@ -204,6 +224,9 @@ shift
 case "$COMMAND" in
     generate)
         cmd_generate "$@"
+        ;;
+    browse)
+        cmd_browse "$@"
         ;;
     doctor)
         cmd_doctor "$@"

@@ -192,6 +192,16 @@ ccskill-gptimage generate "A sunlit indoor lounge with a pool" --reference ./lou
 }
 ```
 
+## 生成画像の閲覧
+
+生成した画像は共有ギャラリーストア(`~/.ccskill-gptimage/gallery`)にも保存され、`ccskill-nanobanana` や `ccskill-omniflash` の生成物と一緒に閲覧できます。閲覧するには [ccskill-gallery](https://github.com/feedtailor/ccskill-gallery) をインストールして以下を実行してください。
+
+```bash
+ccskill-gptimage browse
+```
+
+ccskill-gallery が未インストールの場合、画像の保存先を表示するだけです。
+
 ## 仕様
 
 - **モデル**: `gpt-image-2`(`gpt-image-2-2026-04-21` スナップショット)
