@@ -192,6 +192,16 @@ Each image is saved with a **metadata JSON** sidecar (`{name}.{ext}.json`) for r
 }
 ```
 
+## Browsing your generated images
+
+Every image is also copied into a shared gallery store (`~/.ccskill-gptimage/gallery`), so it shows up alongside images from `ccskill-nanobanana` and `ccskill-omniflash`. To browse it, install [ccskill-gallery](https://github.com/feedtailor/ccskill-gallery) and run:
+
+```bash
+ccskill-gptimage browse
+```
+
+Without ccskill-gallery installed, this just prints where your images are stored.
+
 ## Specs
 
 - **Model**: `gpt-image-2` (snapshot `gpt-image-2-2026-04-21`)

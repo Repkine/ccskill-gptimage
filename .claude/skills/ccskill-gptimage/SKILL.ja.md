@@ -252,6 +252,16 @@ gpt-image-2 は**常に自動で最大忠実度**で入力画像を処理する�
 
 `revised_prompt`: gpt-image-2 がパラフレーズしたプロンプトを返すことがある。本スキルは `[Revised] ...` として stdout に表示 + サイドカーに保存する。次ターンのプロンプト精緻化のヒントとして使える。
 
+## 生成画像の閲覧
+
+生成した画像は共有ギャラリーストア(`~/.ccskill-gptimage/gallery`、`CCSKILL_GPTIMAGE_GALLERY_DIR` で上書き可)にも保存され、`ccskill-nanobanana` や `ccskill-omniflash` の生成物と一緒に閲覧できる。[ccskill-gallery](https://github.com/feedtailor/ccskill-gallery) をインストールし以下を実行:
+
+```bash
+ccskill-gptimage browse
+```
+
+`ccskill-gallery browse` に委譲する(`--port`/`--bind`/`--no-open` はそのまま渡る)。ccskill-gallery が未インストールなら、画像の保存先を表示するだけ。
+
 ## トラブルシューティング
 
 - **原因が分からない時** → `ccskill-gptimage doctor` で環境 + backend を一括診断(秘密ファイルの中身は読まない。presence ベースで報告)

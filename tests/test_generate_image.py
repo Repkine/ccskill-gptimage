@@ -21,13 +21,18 @@ from generate_image import (
     DEFAULT_OUTPUT_FORMAT,
     DEFAULT_QUALITY,
     DEFAULT_SIZE,
+    GALLERY_DIR_ENV,
     OUTPUT_FORMAT_TO_EXT,
+    OUTPUT_FORMAT_TO_MIME,
     _codex_subscription_available,
     _resolve_backend,
     generate_image,
+    get_gallery_dir,
     get_output_path,
+    load_index,
     main,
     parse_args,
+    store_in_gallery,
     validate_size,
 )
 
@@ -55,6 +60,12 @@ def _force_api_backend(request, monkeypatch):
     if request.node.get_closest_marker("no_force_api_backend"):
         return
     monkeypatch.setattr("generate_image._codex_subscription_available", lambda: False)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_gallery(tmp_path, monkeypatch):
+    """テストが実ユーザのギャラリーストア(~/.ccskill-gptimage/gallery)に触れないよう隔離する"""
+    monkeypatch.setenv(GALLERY_DIR_ENV, str(tmp_path / "gallery"))
 
 
 class TestParseArgs:
@@ -1056,3 +1067,186 @@ class TestSizeValidationIntegration:
         )
         out = capsys.readouterr().out
         assert "Codex" in out and ("保証" in out or "warn" in out.lower())
+
+
+# ---------------------------------------------------------------------------
+# ギャラリーストア (issue #024 / ccskill-gallery store-spec v1.0)
+# ---------------------------------------------------------------------------
+
+
+class TestGalleryDir:
+    """ギャラリーストアのパス解決テスト"""
+
+    def test_default_gallery_dir(self, monkeypatch):
+        """デフォルトは ~/.ccskill-gptimage/gallery"""
+        monkeypatch.delenv(GALLERY_DIR_ENV, raising=False)
+        assert get_gallery_dir() == Path.home() / ".ccskill-gptimage" / "gallery"
+
+    def test_env_override(self, monkeypatch):
+        """環境変数でストアのパスを変更できる"""
+        monkeypatch.setenv(GALLERY_DIR_ENV, "/custom/path/gallery")
+        assert get_gallery_dir() == Path("/custom/path/gallery")
+
+
+class TestOutputFormatToMime:
+    def test_png(self):
+        assert OUTPUT_FORMAT_TO_MIME["png"] == "image/png"
+
+    def test_jpeg(self):
+        assert OUTPUT_FORMAT_TO_MIME["jpeg"] == "image/jpeg"
+
+    def test_webp(self):
+        assert OUTPUT_FORMAT_TO_MIME["webp"] == "image/webp"
+
+
+class TestStoreInGallery:
+    """ギャラリーストア蓄積のテスト(store-spec v1.0 準拠)"""
+
+    def _make_image(self, tmpdir: Path, name: str = "20260702_120000.png") -> Path:
+        image_path = tmpdir / name
+        image_path.write_bytes(b"fake-image-data")
+        return image_path
+
+    def _meta(self, prompt="テスト") -> dict:
+        return {
+            "model": DEFAULT_MODEL,
+            "prompt": prompt,
+            "size": "1024x1024",
+            "quality": "auto",
+            "background": "auto",
+            "output_format": "png",
+            "mime_type": "image/png",
+            "moderation": "auto",
+            "reference_images": [],
+            "mask": None,
+            "input_fidelity": None,
+            "revised_prompt": None,
+            "backend": "api",
+            "timestamp": "2026-07-02T12:00:00",
+        }
+
+    def test_image_and_sidecar_copied_to_store(self, tmp_path):
+        """画像とメタデータJSONがストアへコピーされる"""
+        image_path = self._make_image(tmp_path)
+        store_in_gallery(image_path, self._meta())
+
+        gallery = get_gallery_dir()
+        stored_image = gallery / "images" / image_path.name
+        assert stored_image.exists()
+        assert stored_image.read_bytes() == b"fake-image-data"
+        assert (gallery / "images" / (image_path.name + ".json")).exists()
+
+    def test_index_entry_has_required_keys(self, tmp_path):
+        """index.json のエントリに store-spec 必須キー(file/prompt/mime_type/timestamp)が揃う"""
+        image_path = self._make_image(tmp_path)
+        store_in_gallery(image_path, self._meta("夕焼け"))
+
+        index = json.loads(
+            (get_gallery_dir() / "index.json").read_text(encoding="utf-8")
+        )
+        assert len(index["entries"]) == 1
+        entry = index["entries"][0]
+        assert entry["file"] == f"images/{image_path.name}"
+        assert entry["prompt"] == "夕焼け"
+        assert entry["mime_type"] == "image/png"
+        assert entry["timestamp"] == "2026-07-02T12:00:00"
+        assert entry["model"] == DEFAULT_MODEL
+        assert "project_dir" in entry
+
+    def test_multiple_entries_accumulate(self, tmp_path):
+        """複数回の生成でエントリが蓄積される"""
+        img1 = self._make_image(tmp_path, "20260702_120000.png")
+        img2 = self._make_image(tmp_path, "20260702_120100.png")
+        store_in_gallery(img1, self._meta("1枚目"))
+        store_in_gallery(img2, self._meta("2枚目"))
+
+        index = json.loads(
+            (get_gallery_dir() / "index.json").read_text(encoding="utf-8")
+        )
+        assert len(index["entries"]) == 2
+
+    def test_name_collision_gets_unique_name(self, tmp_path):
+        """同名ファイルが既にストアにある場合は一意な名前で保存される"""
+        img = self._make_image(tmp_path)
+        store_in_gallery(img, self._meta())
+        store_in_gallery(img, self._meta())
+
+        index = json.loads(
+            (get_gallery_dir() / "index.json").read_text(encoding="utf-8")
+        )
+        assert len(index["entries"]) == 2
+        files = [e["file"] for e in index["entries"]]
+        assert len(set(files)) == 2  # 重複しない
+
+    def test_corrupt_index_rebuilt_from_sidecars(self, tmp_path):
+        """index.json 破損時はストア内のサイドカーから再構築される"""
+        img1 = self._make_image(tmp_path, "20260702_120000.png")
+        store_in_gallery(img1, self._meta("既存"))
+
+        index_path = get_gallery_dir() / "index.json"
+        index_path.write_text("{ broken json", encoding="utf-8")
+
+        img2 = self._make_image(tmp_path, "20260702_120100.png")
+        store_in_gallery(img2, self._meta("新規"))
+
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        prompts = {e["prompt"] for e in index["entries"]}
+        assert prompts == {"既存", "新規"}
+
+
+class TestGenerateImageStoresGallery:
+    """generate_image() がギャラリーへ蓄積するテスト(API/Codex 両経路)"""
+
+    @patch("generate_image.OpenAI")
+    def test_api_backend_stores_to_gallery(self, mock_openai_cls, tmp_path):
+        client = Mock()
+        mock_openai_cls.return_value = client
+        client.images.generate.return_value = _make_image_response()
+
+        result = generate_image(
+            prompt="蓄積テスト", output_dir=str(tmp_path / "out"), backend="api"
+        )
+
+        assert result is not None
+        gallery = get_gallery_dir()
+        index = json.loads((gallery / "index.json").read_text(encoding="utf-8"))
+        assert len(index["entries"]) == 1
+        entry = index["entries"][0]
+        assert entry["prompt"] == "蓄積テスト"
+        assert entry["mime_type"] == "image/png"
+        assert (gallery / entry["file"]).exists()
+
+    @patch("generate_image.subprocess.run")
+    def test_codex_backend_stores_to_gallery(self, mock_run, monkeypatch, tmp_path):
+        fake = tmp_path / "ig_x.png"
+        fake.write_bytes(base64.b64decode(DUMMY_PNG_B64))
+        monkeypatch.setattr("generate_image._find_latest_codex_image", lambda since: fake)
+        mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
+
+        result = generate_image(
+            prompt="codex蓄積テスト", backend="codex", output_dir=str(tmp_path / "out")
+        )
+
+        assert result is not None
+        gallery = get_gallery_dir()
+        index = json.loads((gallery / "index.json").read_text(encoding="utf-8"))
+        assert len(index["entries"]) == 1
+        assert index["entries"][0]["prompt"] == "codex蓄積テスト"
+        assert index["entries"][0]["backend"] == "codex"
+
+    @patch("generate_image.OpenAI")
+    def test_store_failure_does_not_break_generation(self, mock_openai_cls, monkeypatch, tmp_path, capsys):
+        """ストアへの蓄積が失敗しても画像生成自体は成功として返る"""
+        client = Mock()
+        mock_openai_cls.return_value = client
+        client.images.generate.return_value = _make_image_response()
+
+        def _raise(*args, **kwargs):
+            raise OSError("store failed")
+
+        monkeypatch.setattr("generate_image.store_in_gallery", _raise)
+
+        result = generate_image(prompt="x", output_dir=str(tmp_path / "out"), backend="api")
+
+        assert result is not None
+        assert "[Warning]" in capsys.readouterr().out

@@ -46,6 +46,16 @@ OUTPUT_FORMAT_TO_EXT = {
     "webp": ".webp",
 }
 
+OUTPUT_FORMAT_TO_MIME = {
+    "png": "image/png",
+    "jpeg": "image/jpeg",
+    "webp": "image/webp",
+}
+
+# ギャラリーストア(全 ccskill 横断の生成物蓄積先。issue #024 / ccskill-gallery store-spec v1.0)
+GALLERY_DIR_ENV = "CCSKILL_GPTIMAGE_GALLERY_DIR"
+DEFAULT_GALLERY_DIR = Path.home() / ".ccskill-gptimage" / "gallery"
+
 SIZE_CHOICES = ["auto", "1024x1024", "1024x1536", "1536x1024"]  # よく使う例(enum 強制ではない)
 
 # gpt-image-2 のサイズ制約(出典: gpt-image-2 サイズ仕様 / issue #018 で実証)
@@ -551,6 +561,81 @@ def _save_metadata(image_path: Path, meta: dict) -> Path:
     return meta_path
 
 
+def get_gallery_dir() -> Path:
+    """ギャラリーストアのパスを解決する(環境変数 GALLERY_DIR_ENV で変更可能)。
+
+    ccskill-gallery store-spec v1.0 準拠: デフォルトは ~/.ccskill-gptimage/gallery。
+    """
+    env = os.environ.get(GALLERY_DIR_ENV)
+    if env:
+        return Path(env).expanduser()
+    return DEFAULT_GALLERY_DIR
+
+
+def load_index(gallery_dir: Path) -> dict:
+    """index.json を読み込む。不在・破損時はストア内のサイドカーから再構築する。"""
+    index_path = gallery_dir / "index.json"
+    if index_path.exists():
+        try:
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            if isinstance(index, dict) and isinstance(index.get("entries"), list):
+                return index
+        except (json.JSONDecodeError, OSError):
+            print("[Warning] index.json が破損しているため再構築します")
+
+    entries = []
+    images_dir = gallery_dir / "images"
+    if images_dir.exists():
+        for sidecar in sorted(images_dir.glob("*.json")):
+            image_name = sidecar.name[: -len(".json")]
+            if not (images_dir / image_name).exists():
+                continue
+            try:
+                meta = json.loads(sidecar.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            entries.append({**meta, "file": f"images/{image_name}"})
+        entries.sort(key=lambda e: e.get("timestamp", ""))
+    return {"entries": entries}
+
+
+def store_in_gallery(image_path: Path, metadata: dict) -> Path:
+    """画像とメタデータをギャラリーストアへコピーし index.json に追記する(store-spec v1.0)。"""
+    gallery_dir = get_gallery_dir()
+    images_dir = gallery_dir / "images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+
+    # 既存 index を先に読む(コピー後に読むと再構築時に自分自身を重複計上するため)
+    index = load_index(gallery_dir)
+
+    # 同名衝突時は連番サフィックスで一意化
+    dest = images_dir / image_path.name
+    counter = 1
+    while dest.exists():
+        dest = images_dir / f"{image_path.stem}_{counter}{image_path.suffix}"
+        counter += 1
+
+    shutil.copy2(image_path, dest)
+    sidecar_dest = images_dir / (dest.name + ".json")
+    sidecar_dest.write_text(
+        json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    entry = {
+        **metadata,
+        "file": f"images/{dest.name}",
+        "project_dir": str(Path.cwd()),
+    }
+    index["entries"].append(entry)
+    index_path = gallery_dir / "index.json"
+    index_path.write_text(
+        json.dumps(index, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return dest
+
+
 def generate_image(
     prompt: str,
     *,
@@ -627,23 +712,25 @@ def generate_image(
             if revised:
                 print(f"[Revised] {revised}")
             print(f"[Success] 画像を保存しました (backend=codex): {saved_path}")
-            _save_metadata(
-                saved_path,
-                _build_meta(
-                    model=model,
-                    prompt=prompt,
-                    size=size,
-                    quality=quality,
-                    background=background,
-                    output_format=output_format,
-                    moderation=moderation,
-                    reference_images=reference_images,
-                    mask=mask,
-                    input_fidelity=input_fidelity,
-                    revised=revised,
-                    backend="codex",
-                ),
+            meta = _build_meta(
+                model=model,
+                prompt=prompt,
+                size=size,
+                quality=quality,
+                background=background,
+                output_format=output_format,
+                moderation=moderation,
+                reference_images=reference_images,
+                mask=mask,
+                input_fidelity=input_fidelity,
+                revised=revised,
+                backend="codex",
             )
+            _save_metadata(saved_path, meta)
+            try:
+                store_in_gallery(saved_path, meta)
+            except Exception as e:
+                print(f"[Warning] ギャラリーへの蓄積に失敗しました: {e}")
             return str(saved_path)
 
         # Codex 失敗時のフォールバック判定
@@ -699,23 +786,25 @@ def generate_image(
     output_path.write_bytes(base64.b64decode(b64))
     print(f"[Success] 画像を保存しました: {output_path}")
 
-    _save_metadata(
-        output_path,
-        _build_meta(
-            model=model,
-            prompt=prompt,
-            size=size,
-            quality=quality,
-            background=background,
-            output_format=output_format,
-            moderation=moderation,
-            reference_images=reference_images,
-            mask=mask,
-            input_fidelity=input_fidelity,
-            revised=revised,
-            backend="api",
-        ),
+    meta = _build_meta(
+        model=model,
+        prompt=prompt,
+        size=size,
+        quality=quality,
+        background=background,
+        output_format=output_format,
+        moderation=moderation,
+        reference_images=reference_images,
+        mask=mask,
+        input_fidelity=input_fidelity,
+        revised=revised,
+        backend="api",
     )
+    _save_metadata(output_path, meta)
+    try:
+        store_in_gallery(output_path, meta)
+    except Exception as e:
+        print(f"[Warning] ギャラリーへの蓄積に失敗しました: {e}")
 
     return str(output_path)
 
@@ -742,6 +831,7 @@ def _build_meta(
         "quality": quality,
         "background": background,
         "output_format": output_format,
+        "mime_type": OUTPUT_FORMAT_TO_MIME.get(output_format, "image/png"),
         "moderation": moderation,
         "reference_images": reference_images or [],
         "mask": mask,
