@@ -2,7 +2,7 @@
 
 スキルで生成した作例 26 枚の一覧です。
 
-[English version](gallery.md)
+[English version](gallery.en.md)
 
 ---
 

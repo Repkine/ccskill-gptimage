@@ -1,6 +1,6 @@
 # ccskill-gptimage 画像生成スキル
 
-[English README](README.md)
+[Русский README](README.md) · [English README](README.en.md)
 
 OpenAI **gpt-image-2** (ChatGPT Images 2.0) を使用した Claude Code 用画像生成スキルです。画像生成スクリプト単体としても使用できます。
 

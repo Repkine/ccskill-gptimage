@@ -1,97 +1,106 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Этот файл — руководство для Claude Code (claude.ai/code) при работе с данным репозиторием.
 
-## プロジェクト概要
+> Форк [feedtailor/ccskill-gptimage](https://github.com/feedtailor/ccskill-gptimage).
+> Оригинал этого файла на японском сохранён как [CLAUDE.ja.md](CLAUDE.ja.md).
 
-ccskill-gptimage は Claude Code 用の画像生成スキル。OpenAI `gpt-image-2` (ChatGPT Images 2.0) を使用して、Agentic な画像推論・多言語テキスト描画・反復編集を実現する。姉妹スキル `ccskill-nanobanana` (Gemini 3 Pro Image) と並ぶ ccskill シリーズの 2 枚目の画像生成スキル。
+## О проекте
 
-**設計原則**:
-- 最小構成スタート(Phase 0 は `generate_image.py` 1 ファイルがコア)
-- ccskill-gmail 型のディスパッチャ + commands/ + registry へ段階移行(Phase 1)
-- ベストプラクティス(プロンプト構造化・テキスト描画コツ等)は SKILL.md 側に集約。CLAUDE.md は開発者向け
-- ユーザはプロンプトを書かない — Claude Code が会話文脈/プロジェクトコンテキストからプロンプトを構成する体験を SKILL.md で成立させる
+ccskill-gptimage — скилл генерации изображений для Claude Code. Использует OpenAI `gpt-image-2` (ChatGPT Images 2.0) и даёт агентное рассуждение над картинкой, отрисовку текста на разных языках и итеративное редактирование. Вместе с родственным скиллом `ccskill-nanobanana` (Gemini 3 Pro Image) это вторая генерация изображений в серии ccskill.
 
-## アーキテクチャ
+**Принципы проектирования:**
+
+- Начинать с минимума: ядро фазы 0 — один файл `generate_image.py`.
+- Поэтапно переходить к схеме «диспетчер + commands/ + registry» по образцу ccskill-gmail (фаза 1).
+- Практики промптинга — структурирование, приёмы отрисовки текста и прочее — собираются в SKILL.md. CLAUDE.md предназначен разработчику.
+- Пользователь не пишет промпты: задача SKILL.md — сделать так, чтобы промпт собирал Claude Code из контекста разговора и проекта.
+
+## Архитектура
 
 ```
-Claude Code (Skill: SKILL.md / SKILL.ja.md)
-  ↓ プロンプト・パラメータ指定
+Claude Code (скилл: SKILL.md / SKILL.ja.md)
+  ↓ промпт и параметры
 generate_image.py
-  ├─ Codex CLI 経路 (--backend codex; サブスク認証, API キー不要)
-  │    └─ codex exec → built-in image_gen tool → gpt-image-2
-  ├─ Image API 経路 (--backend api; OPENAI_API_KEY 必須, 従量課金)
+  ├─ путь через Codex CLI (--backend codex; авторизация по подписке, ключ не нужен)
+  │    └─ codex exec → встроенный инструмент image_gen → gpt-image-2
+  ├─ путь через Image API (--backend api; нужен OPENAI_API_KEY, оплата по факту)
   │    └─ openai SDK → /v1/images/generations, /v1/images/edits
-  └─ Responses API 経路 (Phase 0.5 で追加, previous_response_id で反復編集)
+  └─ путь через Responses API (добавляется в фазе 0.5, итеративное редактирование
+     через previous_response_id)
   ↓
-generated_images/ に保存 + メタデータ JSON サイドカー
+сохранение в generated_images/ плюс JSON-сайдкар с метаданными
 ```
 
-デフォルトは `--backend auto` で、Codex CLI(ChatGPT サブスク認証あり)を優先し、失敗時は OPENAI_API_KEY あれば API へフォールバック。issue #017 参照。
+По умолчанию действует `--backend auto`: приоритет у Codex CLI при наличии авторизации по подписке ChatGPT, при неудаче — откат на API, если задан OPENAI_API_KEY. См. issue #017.
 
-`ccskill-nanobanana` のスクリプト構造を踏襲し、Phase 1 で `ccskill-gmail` の CLI ディスパッチャ/registry/doctor 型へ格上げする。
+Структура скриптов повторяет `ccskill-nanobanana`; в фазе 1 планируется переход на схему с диспетчером, registry и doctor по образцу `ccskill-gmail`.
 
-## 参照
+## Ориентиры по файлам
 
-- **インストーラー**: @install.sh(venv 構築 + `~/.local/bin` への symlink 配備 + ユーザレベルスキル登録。issue #020)
-- **CLI ディスパッチャ**: @ccskill-gptimage(自己位置解決。`generate` / `uninstall` / `version` / `help`)
-- **画像生成スクリプト**: @generate_image.py
-- **スキル定義 + プロンプトベストプラクティス + ユースケース別プロンプト集**: @.claude/skills/ccskill-gptimage/SKILL.md / SKILL.ja.md / prompts/
-- **テスト**: @tests/test_generate_image.py
-- **環境変数テンプレート**: @.env.example
-- **ロードマップ**: @.claude/issues/
+- **Установщик**: @install.sh — сборка venv, размещение symlink в `~/.local/bin`, регистрация скилла на уровне пользователя (issue #020)
+- **Диспетчер CLI**: @ccskill-gptimage — определяет собственное расположение, команды `generate` / `uninstall` / `version` / `help`
+- **Скрипт генерации**: @generate_image.py
+- **Определение скилла, практики промптинга и подборки под сценарии**: @.claude/skills/ccskill-gptimage/SKILL.md, SKILL.ja.md, prompts/
+- **Тесты**: @tests/test_generate_image.py
+- **Шаблон переменных окружения**: @.env.example
+- **Дорожная карта**: @.claude/issues/
 
-## テスト手順
+## Как запускать тесты
 
 ```bash
-# リポジトリルートで実行
+# из корня репозитория
 python -m pytest tests/ -v
 ```
 
-**注意事項**:
-- テストは必ずリポジトリルートから実行する
-- API 呼び出しは全てモックされている(実際の OpenAI API キーは不要)
-- `unittest.mock` で OpenAI クライアント・`b64_json` レスポンスをモック
+**Важно:**
 
-## gpt-image-2 固有の運用注意
+- Тесты запускаются только из корня репозитория.
+- Все обращения к API замоканы, настоящий ключ OpenAI не нужен.
+- Клиент OpenAI и ответы с `b64_json` подменяются через `unittest.mock`.
+- На Windows файлы `tests/test_install.py`, `tests/test_doctor.py` и `tests/test_browse.py` не проходят: они запускают bash-скрипты и создают symlink-и. Запускайте `python -m pytest tests/test_generate_image.py` либо прогоняйте всё из WSL.
 
-- **Organization Verification が必須**(未検証 Org では API キーがあっても 403。`--backend codex` ならサブスク認証なので不要)
-- **`background: transparent` は非対応**(指定すると 400)。透過 PNG が必要なら (a) 生成後に rembg 等で背景除去、(b) `--model gpt-image-1.5` に切替、(c) `ccskill-nanobanana` を使用
-- **`input_fidelity` は非対応(常に自動で最大忠実度)**。gpt-image-2 は入力画像を常に最大忠実度で処理するためパラメータ指定が不要 — 構図保持の精度はむしろ強い。トレードオフは編集時の入力画像トークンが多くなる(コスト増)
-- レート制限: Tier 1 は 5 IPM(本番バッチは Tier 3 以上が現実的)
-- タイムアウト: 高品質・複雑プロンプトで最大 2 分。SDK のタイムアウトは ≥120 秒に設定
-- レスポンスは常に `b64_json` のみ(URL は返らない)
-- Function calling / Structured outputs 非対応
-- `partial_images` は 1 枚あたり +100 tok 追加コスト
+## Особенности эксплуатации gpt-image-2
 
-### 画像サイズの厳密制約
+- **Обязательна верификация организации.** В непроверенной организации даже с ключом API вернётся 403. При `--backend codex` этого не требуется — там авторизация по подписке.
+- **`background: transparent` не поддерживается**, при указании вернётся 400. Если нужен прозрачный PNG: (а) убрать фон после генерации через rembg или аналог, (б) переключиться на `--model gpt-image-1.5`, (в) использовать `ccskill-nanobanana`.
+- **`input_fidelity` не поддерживается — точность всегда максимальная автоматически.** gpt-image-2 всегда обрабатывает входные изображения с максимальной точностью, поэтому параметр не нужен, а сохранение композиции у модели даже сильнее обычного. Плата за это — больше токенов на входные изображения при редактировании, то есть выше стоимость.
+- Лимиты запросов: на Tier 1 это 5 изображений в минуту, для боевых пакетных задач реалистичен Tier 3 и выше.
+- Таймаут: на сложных промптах с высоким качеством до двух минут. Таймаут SDK нужно ставить не меньше 120 секунд.
+- Ответ всегда приходит только как `b64_json`, ссылки не возвращаются.
+- Function calling и структурированный вывод не поддерживаются.
+- `partial_images` стоит дополнительно примерно 100 токенов за кадр.
 
-`--size` は `auto` または任意の `WxH` を受け付け、`validate_size()`(issue #018)が以下の制約で検証する。違反は API 呼び出し**前**に具体的な日本語エラーで弾く(出典: note.com/mauekusa 記事 + 本プロジェクトで実証):
+### Строгие ограничения на размер изображения
 
-- 各辺は **16 の倍数**
-- 最大辺長 **3840 px**
-- アスペクト比は **3:1 以下**(極端な縦長/横長は不可)
-- 総ピクセル数は **655,360〜8,294,400** の範囲
+`--size` принимает `auto` или произвольный `WxH`, а `validate_size()` (issue #018) проверяет значение по перечисленным ниже правилам. Нарушение отсекается **до** обращения к API с конкретным сообщением об ошибке. Источник — статья note.com/mauekusa плюс проверки в этом проекте:
 
-backend 別: `--backend api` は厳密にサイズを守る。`--backend codex` は agent 経由で非決定的なため、バリデーションは通すが「サイズ非保証」を警告する。`auto / 1024x1024 / 1024x1536 / 1536x1024` は「よく使うプリセット」として残しているが enum 強制ではない。**2026-06-11 実証**: `--backend api` で上限ちょうどの `3840x2160`(= 8,294,400px)を実解像度どおり生成できることを確認(initial commit 以来 4 値固定だった enum を撤廃)。
+- каждая сторона кратна **16**;
+- длинная сторона не больше **3840 px**;
+- соотношение сторон не больше **3:1** — сильно вытянутые форматы недопустимы;
+- общее число пикселей в диапазоне **655 360 … 8 294 400**.
 
-### コスト表(出力トークンと 1 枚あたりの目安)
+По backend: `--backend api` соблюдает размер строго. `--backend codex` идёт через агента и потому недетерминирован — валидация проходит, но выводится предупреждение, что размер не гарантирован. Значения `auto`, `1024x1024`, `1024x1536` и `1536x1024` оставлены как частые заготовки, но жёстким enum не являются.
 
-per image トークン数(出力単価 $30 / 1M tok):
+**Проверено 11 июня 2026:** через `--backend api` удалось получить ровно граничный `3840x2160` (то есть 8 294 400 пикселей) в точном разрешении. Из-за этого убран enum из четырёх значений, живший с самого первого коммита.
 
-| quality | 1024×1024 | 1024×1536 | 1536×1024 |
+### Стоимость: выходные токены и цена за изображение
+
+Число токенов на изображение при цене 30 $ за 1 млн выходных токенов:
+
+| Качество | 1024×1024 | 1024×1536 | 1536×1024 |
 |---------|----------|----------|----------|
-| low     | 272 tok ($0.006) | 408 tok ($0.011) | 400 tok ($0.011) |
-| medium  | 1,056 tok ($0.053) | 1,584 tok ($0.080) | 1,568 tok ($0.079) |
-| high    | 4,160 tok ($0.211) | 6,240 tok (**$0.165**) | 6,208 tok ($0.210) |
+| low     | 272 ток. (0,006 $) | 408 ток. (0,011 $) | 400 ток. (0,011 $) |
+| medium  | 1 056 ток. (0,053 $) | 1 584 ток. (0,080 $) | 1 568 ток. (0,079 $) |
+| high    | 4 160 ток. (0,211 $) | 6 240 ток. (**0,165 $**) | 6 208 ток. (0,210 $) |
 
-**コスト罠**: `1024×1536` (縦長) の `high` は **$0.165** で、`1024×1024` の `high` ($0.211) より安い。ポートレート用途は意図的に縦長を選ぶ。
+**Ловушка стоимости:** вертикальный `1024×1536` на `high` стоит **0,165 $** — дешевле, чем квадратный `1024×1024` на `high` (0,211 $). Для портретных задач вертикальный формат стоит выбирать осознанно.
 
-(出典: [OpenAI Image generation guide](https://developers.openai.com/api/docs/guides/image-generation) — 2026-04-23 確認)
+Источник: [OpenAI Image generation guide](https://developers.openai.com/api/docs/guides/image-generation), проверено 23 апреля 2026.
 
-### Responses API(Phase 0.5 で追加予定)
+### Responses API (планируется в фазе 0.5)
 
-マルチターン編集向けのもう 1 つの経路。`previous_response_id` で前ターンを継承するため、毎回画像を再アップロードする必要がない:
+Ещё один путь, удобный для многошагового редактирования. `previous_response_id` наследует предыдущий ход, поэтому изображение не нужно загружать заново на каждом шаге:
 
 ```python
 resp = client.responses.create(
@@ -108,91 +117,97 @@ resp2 = client.responses.create(
 )
 ```
 
-Responses API 限定で `action` パラメータ(`auto` / `generate` / `edit`)で生成と編集を明示制御可能。Phase 0.5 で `--continue <response_id>` モードを `generate_image.py` に追加予定。
+Только в Responses API параметр `action` (`auto` / `generate` / `edit`) позволяет явно управлять тем, генерируется изображение или редактируется. В фазе 0.5 в `generate_image.py` планируется режим `--continue <response_id>`.
 
-### 運用上の落とし穴
+### Подводные камни в эксплуатации
 
-- **レイテンシ**: 高品質・複雑プロンプトは最大 2 分かかる。SDK タイムアウトは 120 秒以上に
-- **一貫性**: キャラクターやブランド要素の同一性は seed 機構が無いため微妙に揺れる。**参照画像 + プロンプトで明示** が必須(Cookbook 6.4 パターン、SKILL の `prompts/character-and-concept.md`)
-- **レイアウト制御**: 厳密な座標指定は苦手。マスク併用か、構造化プロンプトで段階的に
-- **Tier 制限**: Tier 1 は 5 IPM。本番バッチ投入は Tier 3 以上が現実的
-- **`gpt-image-1.5` はデフォルトから降格したが API では利用可能**。透過 PNG のための旧モデルとして残されている
+- **Задержка.** Сложные промпты с высоким качеством занимают до двух минут. Таймаут SDK — от 120 секунд.
+- **Единообразие.** Механизма seed нет, поэтому персонажи и элементы бренда от кадра к кадру слегка плывут. Обязательны **референсное изображение плюс явные указания в промпте** — это паттерн 6.4 из Cookbook, см. `prompts/character-and-concept.md`. В этом форке для серий есть ещё `--codex-resume`.
+- **Управление раскладкой.** Точные координаты модели даются плохо. Нужна либо маска, либо структурированный промпт с постепенным уточнением.
+- **Лимиты уровня.** На Tier 1 это 5 изображений в минуту; боевые пакетные задачи реалистичны с Tier 3.
+- **`gpt-image-1.5` понижена и больше не является моделью по умолчанию, но через API доступна.** Её оставили как старую модель для прозрачных PNG.
 
-## Codex CLI backend(`--backend codex` / 自動)
+## Backend Codex CLI (`--backend codex` и автоматический выбор)
 
-ChatGPT サブスク + Codex CLI が利用可能なら、API キー不要で gpt-image-2 を呼べる。`generate_image.py` は `--backend {auto,codex,api}` で切替可能(デフォルト `auto`)。
+При наличии подписки ChatGPT и установленного Codex CLI можно вызывать gpt-image-2 без ключа API. Переключение делается через `--backend {auto,codex,api}`, по умолчанию `auto`.
 
-### auto モードの判定ロジック
+### Логика режима auto
 
-1. `shutil.which("codex")` が PATH 上で見つかる
-2. `~/.codex/auth.json` が存在し、`tokens.access_token` が非空(= ChatGPT サブスクで `codex login` 済み)
+1. `shutil.which("codex")` находит команду в PATH.
+2. Существует `~/.codex/auth.json`, и поле `tokens.access_token` непустое, то есть выполнен `codex login` по подписке ChatGPT.
 
-両方満たせば Codex 経路、それ以外は API 経路。Codex 経路で失敗(timeout / exit ≠ 0 / 画像未生成)した場合、`auto` モードかつ `OPENAI_API_KEY` があれば API へフォールバックする。`--backend codex` 明示時はフォールバックしない(意図尊重)。
+Если выполнены оба условия — идём через Codex, иначе через API. При неудаче на пути Codex (таймаут, код возврата не 0, изображение не создано) в режиме `auto` и при наличии `OPENAI_API_KEY` происходит откат на API. При явном `--backend codex` отката нет — намерение пользователя уважается.
 
-### Codex 経路の実装上の制約(必ず守ること)
+### Ограничения реализации пути Codex (соблюдать обязательно)
 
-1. **CLI 引数順序**: `codex exec ... 'PROMPT' -i ref.png` の順を厳守。`-i` は variadic で後続の positional prompt まで画像として食う罠がある(検証済み 2026-04-25)
-2. **保存パス指定不可**: agent に「特定パスへ保存して」は通らない。スクリプトが出力を自動回収して指定パスへコピーする。回収方法は Codex のバージョンで異なり、両対応している(出典: PR #1 / マージコミット `6bb46b2`、issue #023):
-   - 旧 Codex(2026-06-17 まで確認): `~/.codex/generated_images/<session-id>/ig_*.png` にファイル出力。`_find_latest_codex_image()` で mtime 最新を回収
-   - 新 Codex(codex-cli v0.141.0 で確認): ファイルを書かず、セッションログ `~/.codex/sessions/.../rollout-*.jsonl` の `image_generation_call.result` に inline base64 で返す。`_recover_codex_image_from_session()` が `_extract_codex_session_id()` / `_find_codex_session_log()` 経由で base64 を回収する
-   - ファイル出力があればそちらを優先し、無ければログ回収にフォールバックするため、新旧どちらの Codex でも動作する
-3. **`image_gen` 直接使用を必ず明記**: プロンプトに「API キーやスクリプトを書かず、組み込みの image_gen ツールを直接使ってください」を入れないと、Codex は curl/Python で API 直叩きルート(従量課金化)を取る
-4. **`size` / `quality` 厳密制御不可**: プロンプトで指示は通るが agent 経由のため非決定的(検証で 1024×1536 指定が 1254×1254 になる事例あり)。ピクセル単位の精度が必須なら `--backend api`
-5. **`--mask` 非対応**: Codex 経由では mask 受け渡し API 露出なし。auto なら API へフォールバック、`--backend codex` 明示時はエラー
-6. **サンドボックス**: `--sandbox workspace-write` で動作確認済み。問題が出たら `--dangerously-bypass-approvals-and-sandbox` 採用検討(理由: OpenAI への HTTPS 通信許可のため。ローカル危害ではない)
+1. **Порядок аргументов CLI.** Строго `codex exec ... ПРОМПТ -i ref.png`. Флаг `-i` variadic и способен съесть идущий следом позиционный промпт, приняв его за изображение. Проверено 25 апреля 2026. В этом форке промпт передаётся через stdin, а его место занимает `-`, но требование «до `-i`» остаётся в силе.
+2. **Путь сохранения задать нельзя.** Указание агенту «сохрани по такому-то пути» не работает. Скрипт сам забирает результат и копирует его в нужное место. Способ зависит от версии Codex, поддерживаются оба (источник: PR #1, коммит слияния `6bb46b2`, issue #023):
+   - старый Codex, подтверждено до 17 июня 2026: пишет файл в `~/.codex/generated_images/<session-id>/ig_*.png`, забирается функцией `_find_latest_codex_image()` по самому свежему mtime;
+   - новый Codex, подтверждено на codex-cli v0.141.0: файл не создаёт и возвращает inline-base64 в поле `image_generation_call.result` лога сессии `~/.codex/sessions/.../rollout-*.jsonl`. Забирает `_recover_codex_image_from_session()` через `_extract_codex_session_id()` и `_find_codex_session_log()`.
+   - Приоритет у файла; если его нет, работает откат на разбор лога, поэтому обе версии Codex поддерживаются.
+   - Дополнение форка: codex-cli 0.146 называет файл `exec-<call-id>.png`, поэтому маска поиска расширена до любых PNG.
+3. **Обязательно требовать прямого использования `image_gen`.** Без фразы «не пиши ключи API и скрипты, используй встроенный инструмент image_gen напрямую» Codex уходит вызывать API через curl или Python, и генерация становится платной поштучно.
+4. **Строго управлять `size` и `quality` нельзя.** Указания в промпте проходят, но путь через агента недетерминирован: при проверке запрос 1024×1536 однажды вернулся как 1254×1254. Если нужна точность до пикселя — `--backend api`.
+5. **`--mask` не поддерживается.** Через Codex маску передать некуда. В режиме auto происходит откат на API, при явном `--backend codex` возвращается ошибка.
+6. **Песочница.** Работоспособность подтверждена с `--sandbox workspace-write`. При проблемах можно рассмотреть `--dangerously-bypass-approvals-and-sandbox` — причина в разрешении HTTPS-запросов к OpenAI, а не в локальных рисках. Важно: у подкоманды `codex exec resume` флага `--sandbox` нет, при передаче она падает с unknown argument.
 
-### Codex 公式 imagegen skill との関係
+### Отношение к официальному скиллу imagegen в Codex
 
-Codex 自身が `~/.codex/skills/.system/imagegen/` に公式の image generation skill を持っている(`scripts/image_gen.py` CLI fallback 含む)。本スキルとは **ターゲット層が異なる**:
+У самого Codex есть официальный скилл генерации изображений в `~/.codex/skills/.system/imagegen/`, включая запасной CLI `scripts/image_gen.py`. **Аудитории разные:**
 
-- **Codex 公式 imagegen**: Codex CLI ユーザ向け
-- **ccskill-gptimage**: Claude Code ユーザ向け、Codex を transport として使う
+- **официальный imagegen** предназначен пользователям Codex CLI;
+- **ccskill-gptimage** предназначен пользователям Claude Code и использует Codex как транспорт.
 
-機能被りではなく、別ターゲットへの提供。本スキルの差別化は (a) Claude Code 統合、(b) `--backend` 抽象化、(c) フォールバックロジック、(d) メタデータ JSON サイドカー、(e) prompts/ 14 ファイルの Cookbook 集約知見。
+Это не дублирование функций, а разные адресаты. Отличия данного скилла: (а) интеграция с Claude Code, (б) абстракция `--backend`, (в) логика отката, (г) JSON-сайдкар с метаданными, (д) знания Cookbook, собранные в четырнадцати файлах `prompts/`.
 
-## コミットメッセージ規約
+## Соглашение о сообщениях коммитов
 
-1行目は `type: 概要 (#issue番号)` 形式(Conventional Commits)。
+Первая строка в формате `тип: краткое описание (#номер issue)` — по Conventional Commits.
 
-| type | 用途 | update 時の履歴表示 |
+| Тип | Назначение | Показывается в истории при update |
 |------|------|-------------------|
-| `feat` | 新機能 | 表示される |
-| `fix` | バグ修正 | 表示される |
-| `docs` | ドキュメントのみ | 表示されない |
-| `refactor` | リファクタ | 表示されない |
-| `chore` | 雑務(CI、依存更新等) | 表示されない |
-| `test` | テスト | 表示されない |
+| `feat` | новая возможность | да |
+| `fix` | исправление ошибки | да |
+| `docs` | только документация | нет |
+| `refactor` | рефакторинг | нет |
+| `chore` | рутина: CI, обновление зависимостей | нет |
+| `test` | тесты | нет |
 
-将来 `ccskill-gptimage update` の履歴表示を実装する際は、`feat:` と `fix:` のみ抽出する(マージコミットは除外)。ユーザーに影響する変更だけ見せる。
+Когда будет реализован показ истории в `ccskill-gptimage update`, брать нужно только `feat:` и `fix:`, исключая коммиты слияния. Пользователю показываются лишь те изменения, которые его касаются.
 
-## コード規約
+## Соглашения по коду
 
 ### Python
-- Python 3.10+(型ヒントに `list[str]` 等の新構文を使用)
-- `pathlib.Path` を使用(文字列パスではなく)
-- `.env` の読み込みは `python-dotenv` 経由
-- OpenAI SDK は `openai>=2.0`
 
-### デフォルト値
-- 解像度: `1024x1024`(`auto` を使う場合はモデル任せ)
-- 品質: `auto`
-- 出力形式: `png`
-- 出力先: `./generated_images`
-- ファイル名形式: `YYYYMMDD_HHMMSS.{ext}`(出力形式から拡張子を決定)
+- Python 3.10+, в аннотациях используется новый синтаксис вроде `list[str]`.
+- Пути — через `pathlib.Path`, не строками.
+- `.env` читается через `python-dotenv`.
+- OpenAI SDK версии `openai>=2.0`.
+- **Работа с файлами всегда с явным `encoding="utf-8"`.** Без этого Windows пишет в локальной кодовой странице, и файлы с кириллицей или японским портятся либо вообще не записываются.
 
-### 依存パッケージ
-- `openai>=2.0` — OpenAI API クライアント
-- `python-dotenv>=1.0.0` — 環境変数読み込み
-- `pytest>=8.0.0` — テストフレームワーク
+### Значения по умолчанию
 
-### Bash / シェルスクリプト(Phase 1 以降)
-- `cp` ではなく `/bin/cp` を使用(macOS alias 対策)
-- 環境変数 `CCSKILL_GPTIMAGE_DIR` はディスパッチャが設定
-- `$()` によるサブシェルは sandbox の確認プロンプトを発生させるためパイプで代替
+- Разрешение: `1024x1024`, при `auto` решает модель.
+- Качество: `auto`.
+- Формат: `png`.
+- Каталог вывода: `./generated_images`.
+- Имя файла: `ГГГГММДД_ЧЧММСС.{расширение}`, расширение определяется форматом вывода.
 
-## 関連ドキュメント
+### Зависимости
 
-- 公式: [OpenAI Image generation guide](https://developers.openai.com/api/docs/guides/image-generation)
-- 公式: [gpt-image-2 model page](https://developers.openai.com/api/docs/models/gpt-image-2)
-- 公式: [GPT Image Generation Models Prompting Guide (Cookbook)](https://developers.openai.com/cookbook/examples/multimodal/image-gen-models-prompting-guide)
-- 姉妹スキル: [ccskill-nanobanana](https://github.com/feedtailor/ccskill-nanobanana)
+- `openai>=2.0` — клиент OpenAI API
+- `python-dotenv>=1.0.0` — чтение переменных окружения
+- `pytest>=8.0.0` — тесты
+
+### Bash и shell-скрипты (с фазы 1)
+
+- Использовать `/bin/cp`, а не `cp` — защита от алиасов в macOS.
+- Переменную окружения `CCSKILL_GPTIMAGE_DIR` задаёт диспетчер.
+- Подстановку `$()` заменять конвейером: она вызывает запрос подтверждения в песочнице.
+
+## Связанные документы
+
+- Официально: [OpenAI Image generation guide](https://developers.openai.com/api/docs/guides/image-generation)
+- Официально: [страница модели gpt-image-2](https://developers.openai.com/api/docs/models/gpt-image-2)
+- Официально: [GPT Image Generation Models Prompting Guide (Cookbook)](https://developers.openai.com/cookbook/examples/multimodal/image-gen-models-prompting-guide)
+- Родственный скилл: [ccskill-nanobanana](https://github.com/feedtailor/ccskill-nanobanana)

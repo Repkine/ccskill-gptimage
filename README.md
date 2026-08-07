@@ -1,186 +1,215 @@
-# ccskill-gptimage Image Generation Skill
+# ccskill-gptimage — генерация изображений для Claude Code
 
-[日本語 README](README.ja.md)
+[English README](README.en.md) · [日本語 README](README.ja.md)
 
-A Claude Code image-generation skill powered by OpenAI **gpt-image-2** (ChatGPT Images 2.0). Also usable as a standalone image-generation script.
+Скилл Claude Code для генерации изображений на базе OpenAI **gpt-image-2** (ChatGPT Images 2.0). Работает и как самостоятельный скрипт генерации.
 
-## Features
+> **Это форк.** Оригинал — [feedtailor/ccskill-gptimage](https://github.com/feedtailor/ccskill-gptimage).
+> Здесь добавлено то, чего нет в апстриме:
+> - **работоспособность под Windows** — пять багов, из-за которых backend `codex` не запускался вовсе (подробности в истории коммитов);
+> - **`--codex-resume`** — наследование визуального стиля между слайдами серии;
+> - **вся документация и сообщения переведены на русский**.
+>
+> Апстрим написан на японском и английском; оригинальные тексты сохранены в файлах с суффиксами `.en` и `.ja`.
 
-You don't need to write prompts explicitly: the skill composes an optimal prompt from your project information and context, and generates images with ChatGPT Images 2.0 inside a Claude Code session.
+## Возможности
 
-- **No API key needed** — works in association with your ChatGPT subscription (an API key is required for 4K / strict exact-size generation)
-- **Multilingual text rendering** — strong at non-Latin scripts like Japanese (kanji/kana/vertical), Korean, and Chinese
-- **Reference-image editing** — composite and partially edit existing images via `--reference`
-- **Auto metadata sidecar** — the prompt and parameters used for each generation, saved as JSON
+Промпт писать не нужно: скилл сам собирает его из контекста проекта и генерирует изображения через ChatGPT Images 2.0 прямо в сессии Claude Code.
 
-## Examples
+- **Без ключа API** — работает по подписке ChatGPT. Ключ нужен только для 4K и строго точного размера
+- **Текст на любых языках** — модель уверенно рисует кириллицу, японский (иероглифы, кана, вертикальный набор), корейский и китайский
+- **Редактирование по референсу** — через `--reference` можно собирать композиции и править готовые изображения
+- **Метаданные рядом с картинкой** — промпт и параметры каждой генерации сохраняются в JSON
 
-Examples generated with this skill. See the full gallery at [`docs/gallery.md`](docs/gallery.md).
+## Примеры
+
+Работы, сделанные этим скиллом. Полная галерея — в [`docs/gallery.md`](docs/gallery.md).
 
 <table>
 <tr>
-  <td align="center" width="33%"><img src="assets/capability-survey/categories/01_photorealistic_portrait_woman.png" width="260" alt="Photoreal portrait"></td>
-  <td align="center" width="33%"><img src="assets/capability-survey/categories/19_urban_tokyo_rainy_night_v3.png" width="260" alt="Tokyo Shibuya scramble crossing at rainy night"></td>
-  <td align="center" width="33%"><a href="docs/gallery.md"><img src="assets/capability-survey/categories/18_nature_volcanic_coast_dawn.png" width="260" alt="See the full gallery"></a></td>
+  <td align="center" width="33%"><img src="assets/capability-survey/categories/01_photorealistic_portrait_woman.png" width="260" alt="Фотореалистичный портрет"></td>
+  <td align="center" width="33%"><img src="assets/capability-survey/categories/19_urban_tokyo_rainy_night_v3.png" width="260" alt="Перекрёсток Сибуя в Токио дождливой ночью"></td>
+  <td align="center" width="33%"><a href="docs/gallery.md"><img src="assets/capability-survey/categories/18_nature_volcanic_coast_dawn.png" width="260" alt="Открыть полную галерею"></a></td>
 </tr>
 <tr>
-  <td align="center" width="33%"><img src="assets/capability-survey/categories/24_line_drawing_fashion_sketch.png" width="260" alt="Fashion line drawing"></td>
-  <td align="center" width="33%"><img src="assets/capability-survey/categories/14_japanese_poster_vertical_tategaki.png" width="260" alt="Vertical Japanese poster"></td>
-  <td align="center" width="33%"><img src="assets/capability-survey/categories/06_ui_mockup_settings_japanese.png" width="260" alt="iOS Settings UI in Japanese"></td>
+  <td align="center" width="33%"><img src="assets/capability-survey/categories/24_line_drawing_fashion_sketch.png" width="260" alt="Модный скетч линией"></td>
+  <td align="center" width="33%"><img src="assets/capability-survey/categories/14_japanese_poster_vertical_tategaki.png" width="260" alt="Японский плакат с вертикальным набором"></td>
+  <td align="center" width="33%"><img src="assets/capability-survey/categories/06_ui_mockup_settings_japanese.png" width="260" alt="Макет экрана настроек iOS"></td>
 </tr>
 </table>
 
-## Requirements
+## Что потребуется
 
-This skill can be used in two ways, each with different requirements. You can also switch between the two backends with the `--backend` parameter. For 4K generation or strict size control, Option B (API key) is required, so using both together is recommended.
+Скилл работает двумя способами, требования у них разные. Переключаться между ними можно параметром `--backend`. Для 4K и точного контроля размера обязателен вариант Б, поэтому удобнее держать оба сразу.
 
-**Option A: ChatGPT subscription + Codex CLI**
+**Вариант А: подписка ChatGPT + Codex CLI**
 - Python 3.10+
-- ChatGPT subscription (Plus or higher)
-- [Codex CLI](https://github.com/openai/codex) installed and logged in via `codex login`
+- подписка ChatGPT (Plus или выше)
+- установленный [Codex CLI](https://github.com/openai/codex) со входом через `codex login`
 
-**Option B: OpenAI API key**
+**Вариант Б: ключ OpenAI API**
 - Python 3.10+
-- OpenAI API key
-- Organization Verification
+- ключ OpenAI API
+- пройденная верификация организации (Organization Verification)
 
-## Setup
-### 1. Clone the repository
-Clone anywhere you prefer.
+## Установка
+
+### 1. Клонирование репозитория
+
+Клонировать можно куда угодно.
 
 ```bash
 cd /path/to/projects
-git clone https://github.com/feedtailor/ccskill-gptimage.git
+git clone https://github.com/Repkine/ccskill-gptimage.git
 ```
 
-### 2. Prepare image generation
+### 2. Подготовка генерации
 
-Make ChatGPT Images 2.0 available. The preparation differs by usage, so pick the one that fits — Option A is recommended.
+Нужно сделать ChatGPT Images 2.0 доступным. Выберите подходящий вариант — рекомендуется А.
 
-#### Option A: ChatGPT subscription + Codex CLI
-(Skip this if you already use the Codex CLI linked to your subscription.)
+#### Вариант А: подписка ChatGPT + Codex CLI
+
+Если вы уже пользуетесь Codex CLI по подписке, шаг можно пропустить.
 
 ```bash
-# Install Codex CLI (Homebrew)
+# Установка Codex CLI (Homebrew)
 brew install codex
-# Log in with your ChatGPT account
+# Вход под аккаунтом ChatGPT
 codex login
 ```
 
-#### Option B: OpenAI API key
-Configure the following on the [OpenAI Platform](https://platform.openai.com/):
+На Windows Codex CLI ставится через npm:
 
-- (a) Issue an API key at [API keys](https://platform.openai.com/api-keys)
-- (b) Complete verification at [Organization Settings](https://platform.openai.com/settings/organization/general) → General → Verification
+```bash
+npm install -g @openai/codex
+```
 
-Once configured, write the API key into a `.env` file.
+#### Вариант Б: ключ OpenAI API
+
+На [OpenAI Platform](https://platform.openai.com/) нужно сделать две вещи:
+
+- (а) выпустить ключ в разделе [API keys](https://platform.openai.com/api-keys);
+- (б) пройти верификацию: [Organization Settings](https://platform.openai.com/settings/organization/general) → General → Verification.
+
+Затем записать ключ в файл `.env`:
 
 ```bash
 cp .env.example .env
 ```
 
-Add the API key from (a) to `.env`:
+И добавить туда ключ из пункта (а):
+
 ```
 OPENAI_API_KEY=sk-...
 ```
 
-### 3. Run the installer
+### 3. Запуск установщика
 
-Move into the directory where you cloned ccskill-gptimage and run:
+Перейдите в каталог, куда клонировали репозиторий, и выполните:
 
 ```bash
 cd /path/to/ccskill-gptimage
 ./install.sh
 ```
 
-The installer takes care of everything:
+Установщик делает всё сам:
 
-- Creates the Python venv and installs dependencies
-- Deploys the `ccskill-gptimage` command to `~/.local/bin` (tells you what to add if it's not in your PATH)
-- Registers the skill at the user level (`~/.claude/skills/ccskill-gptimage`), so it's available in **every** Claude Code project — no per-project setup needed
-- Diagnoses which backends (Codex CLI / API key) are currently available
+- создаёт venv и ставит зависимости;
+- кладёт команду `ccskill-gptimage` в `~/.local/bin` и подсказывает, что дописать в PATH, если его там нет;
+- регистрирует скилл на уровне пользователя (`~/.claude/skills/ccskill-gptimage`), после чего он доступен во **всех** проектах Claude Code без отдельной настройки;
+- показывает, какие backend сейчас доступны — Codex CLI или ключ API.
 
-## Usage
+> `install.sh` — bash-скрипт и рассчитан на macOS и Linux. На Windows он работает из Git Bash или WSL; при запуске из PowerShell создайте venv вручную (`python -m venv venv`, затем `pip install -r requirements.txt`) и вызывайте `generate_image.py` напрямую.
 
-In any Claude Code project, just ask it to generate images with ChatGPT Images 2.0 (e.g. `use gptimage to ...`), or type `/ccskill-gptimage` in your prompt. Describe what you want **in any language** — Claude Code builds the optimal prompt from context and auto-selects size, quality, and backend for the task.
+## Использование
 
-- Generate from project context
+В любом проекте Claude Code достаточно попросить сгенерировать изображение через ChatGPT Images 2.0 — например, «сделай через gptimage…» — или написать в промпте `/ccskill-gptimage`. Описывать задачу можно **на любом языке**: Claude Code сам соберёт оптимальный промпт по контексту и подберёт размер, качество и backend.
+
+- Генерация по контексту проекта:
   ```
-  Look at the LP HTML @lp.html and generate 3 hero-image options that fit its content
+  Посмотри вёрстку лендинга @lp.html и предложи три варианта главной картинки под его содержание
   ```
-- Generate based on an existing image
+- Генерация на основе готового изображения:
   ```
-  Based on the product photo @product.jpg, make versions with the weather/time changed to "overcast" and "dusk"
+  На основе фото товара @product.jpg сделай версии с погодой «пасмурно» и временем суток «сумерки»
   ```
 
-### Tips
-- On first use, Claude Code may ask for permission to run `ccskill-gptimage`. To skip it, add `Bash(ccskill-gptimage:*)` to `permissions.allow` in `~/.claude/settings.json`.
+### Полезное
 
+- При первом запуске Claude Code может спросить разрешение на выполнение `ccskill-gptimage`. Чтобы не спрашивал, добавьте `Bash(ccskill-gptimage:*)` в `permissions.allow` файла `~/.claude/settings.json`.
 
-## Updating
-Run `git pull` where you cloned this skill. Both the skill registration and the command are symlinks to the clone, so they pick up the update automatically:
+## Обновление
+
+Выполните `git pull` в каталоге клона. И регистрация скилла, и команда — это symlink на клон, поэтому обновление подхватывается само:
 
 ```bash
 cd /path/to/ccskill-gptimage
 git pull
 ```
 
-## Uninstalling
+## Удаление
 
 ```bash
 ccskill-gptimage uninstall
 ```
 
-This removes the symlinks (`~/.local/bin/ccskill-gptimage` and `~/.claude/skills/ccskill-gptimage`); the cloned repository itself is kept.
+Команда убирает symlink-и (`~/.local/bin/ccskill-gptimage` и `~/.claude/skills/ccskill-gptimage`), сам склонированный репозиторий остаётся на месте.
 
-## Using the CLI standalone
+## Работа из командной строки
 
-You can also use it as an image-generation command, from any directory:
+Скилл можно использовать и как обычную команду генерации, из любого каталога:
 
 ```bash
-ccskill-gptimage generate "a coastal sunset"
+ccskill-gptimage generate "закат на побережье"
 ```
 
-### Options
+### Параметры
 
-| Option | Description | Default |
+| Параметр | Описание | По умолчанию |
 |---|---|---|
-| `--size` | Output size: `auto` or free `WxH` (constraints below). Presets: `1024x1024`/`1024x1536`/`1536x1024`; up to `3840x2160` (4K) | `1024x1024` |
-| `--quality` | Quality (`auto`/`low`/`medium`/`high`) | `auto` |
-| `--background` | Background (`auto`/`opaque`). `transparent` is unsupported by gpt-image-2 (use `gpt-image-1.5`) | `auto` |
-| `--output-format` | Output format (`png`/`jpeg`/`webp`) | `png` |
-| `--output-compression` | Compression for jpeg/webp (0-100) | none |
-| `--output` | Output directory | `./generated_images` |
-| `--reference` | Reference image (repeatable) | none |
-| `--mask` | Mask image (transparent area = editable) | none |
-| `--input-fidelity` | Not needed for gpt-image-2 (always max fidelity). For `gpt-image-1.5` | none |
-| `--moderation` | Moderation (`auto`/`low`) | `auto` |
-| `--backend` | Generation backend (`auto`/`codex`/`api`). `auto` prefers Codex, falls back to API on failure | `auto` |
+| `--size` | Размер: `auto` или произвольный `WxH` (ограничения ниже). Готовые варианты: `1024x1024`, `1024x1536`, `1536x1024`; максимум `3840x2160` (4K) | `1024x1024` |
+| `--quality` | Качество: `auto`, `low`, `medium`, `high` | `auto` |
+| `--background` | Фон: `auto`, `opaque`. Значение `transparent` gpt-image-2 не поддерживает — нужна `gpt-image-1.5` | `auto` |
+| `--output-format` | Формат: `png`, `jpeg`, `webp` | `png` |
+| `--output-compression` | Сжатие для jpeg и webp, 0–100 | нет |
+| `--output` | Каталог вывода | `./generated_images` |
+| `--reference` | Референсное изображение, можно указывать несколько раз | нет |
+| `--mask` | Маска: прозрачная область — редактируемая | нет |
+| `--input-fidelity` | Для gpt-image-2 не нужен, точность всегда максимальная. Имеет смысл только для `gpt-image-1.5` | нет |
+| `--moderation` | Модерация: `auto`, `low` | `auto` |
+| `--backend` | Backend генерации: `auto`, `codex`, `api`. При `auto` сначала пробуется Codex, при неудаче — откат на API | `auto` |
+| `--codex-resume` | ID сессии Codex для продолжения: серия слайдов наследует стиль. Только с `--backend codex`. Есть только в этом форке | нет |
 
-For details on each option, see the [Options Guide](docs/options.md).
+Подробнее о каждом параметре — в [руководстве по параметрам](docs/options.md).
 
-### Examples
+### Примеры
 
 ```bash
-# Basic
+# Базовый вызов
 ccskill-gptimage generate "A minimalist fox logo, flat vector, navy and gold"
 
-# Japanese poster
-ccskill-gptimage generate 'A minimalist editorial poster with the exact title "腹落ちDMARC" in large serif Japanese font, dark navy background' --size 1024x1536 --quality high
+# Плакат с текстом
+ccskill-gptimage generate 'Минималистичный плакат с крупным заголовком "ГЛАВНОЕ" рубленым шрифтом, тёмно-синий фон' --size 1024x1536 --quality high
 
-# Edit using a reference (background swap)
-ccskill-gptimage generate "Place the same fox logo on a deep navy background with subtle gold sparkles. Preserve the fox's pose and proportions from the reference." --reference ./logo.png --quality medium
+# Редактирование по референсу — замена фона
+ccskill-gptimage generate "Помести тот же логотип лисы на глубокий тёмно-синий фон с мелкими золотыми искрами. Позу и пропорции лисы с референса сохрани." --reference ./logo.png --quality medium
 
-# Multi-reference composition
+# Композиция из нескольких референсов
 ccskill-gptimage generate "Photorealistic gift basket on white" --reference ./a.png --reference ./b.png --reference ./c.png
 
-# Mask-guided editing (requires --backend api)
+# Редактирование по маске (требует --backend api)
 ccskill-gptimage generate "A sunlit indoor lounge with a pool" --reference ./lounge.png --mask ./mask.png --backend api
+
+# Серия слайдов в одном стиле (только в этом форке)
+ccskill-gptimage generate "Слайд 1: обложка" --backend codex
+# из вывода берём строку [Session] <id> и передаём её дальше
+ccskill-gptimage generate "Слайд 2: состав" --backend codex --codex-resume <id>
 ```
 
-### Output files
+### Файлы на выходе
 
-Each image is saved with a **metadata JSON** sidecar (`{name}.{ext}.json`) for reproduction and refinement:
+Рядом с каждым изображением сохраняется **JSON с метаданными** (`{имя}.{расширение}.json`) — чтобы можно было воспроизвести и доработать результат:
+
 ```json
 {
   "model": "gpt-image-2",
@@ -192,49 +221,56 @@ Each image is saved with a **metadata JSON** sidecar (`{name}.{ext}.json`) for r
 }
 ```
 
-## Browsing your generated images
+## Просмотр созданных изображений
 
-Every image is also copied into a shared gallery store (`~/.ccskill-gptimage/gallery`), so it shows up alongside images from `ccskill-nanobanana` and `ccskill-omniflash`. To browse it, install [ccskill-gallery](https://github.com/feedtailor/ccskill-gallery) and run:
+Каждое изображение копируется в общее хранилище (`~/.ccskill-gptimage/gallery`), поэтому оказывается рядом с результатами `ccskill-nanobanana` и `ccskill-omniflash`. Для просмотра поставьте [ccskill-gallery](https://github.com/feedtailor/ccskill-gallery) и выполните:
 
 ```bash
 ccskill-gptimage browse
 ```
 
-Without ccskill-gallery installed, this just prints where your images are stored.
+Без установленного ccskill-gallery команда просто напечатает, где лежат изображения.
 
-## Specs
+## Характеристики
 
-- **Model**: `gpt-image-2` (snapshot `gpt-image-2-2026-04-21`)
-- **Input**: text / images
-- **Output**: image only (`b64_json`, no URL is returned)
-- **Max resolution**: up to 4K (longest side ≤ 3840px). `--size` accepts free `WxH` validated against the model's constraints — each side a multiple of 16, longest side ≤ 3840px, aspect ratio ≤ 3:1, total pixels 655,360–8,294,400. `--backend api` honors the exact size (e.g. `3840x2160`); `--backend codex` is non-deterministic (size not guaranteed)
-- **Endpoints**: `/v1/images/generations`, `/v1/images/edits`
-- **Filename**: timestamp form (e.g. `20260423_153045.png`)
-- **Moderation**: `auto` (default) / `low`
+- **Модель**: `gpt-image-2` (снапшот `gpt-image-2-2026-04-21`)
+- **Вход**: текст и изображения
+- **Выход**: только изображение (`b64_json`, ссылка не возвращается)
+- **Максимальное разрешение**: до 4K, длинная сторона не больше 3840px. `--size` принимает произвольный `WxH`, который проверяется по ограничениям модели: каждая сторона кратна 16, длинная сторона до 3840px, соотношение сторон до 3:1, общее число пикселей от 655,360 до 8,294,400. `--backend api` соблюдает размер точно (например, `3840x2160`), `--backend codex` недетерминирован и размер не гарантирует
+- **Эндпоинты**: `/v1/images/generations`, `/v1/images/edits`
+- **Имя файла**: метка времени, например `20260423_153045.png`
+- **Модерация**: `auto` по умолчанию или `low`
 
-## Generation time (rough guide)
+## Время генерации, ориентировочно
 
-Median of 3 runs per backend × quality at `1024x1024`, same prompt (range in parentheses). Approximate — varies with network and load.
+Медиана трёх запусков для каждой пары backend × качество при `1024x1024` и одном и том же промпте, в скобках разброс. Значения приблизительные и зависят от сети и нагрузки.
 
-| quality | api | codex |
+| Качество | api | codex |
 |---|---|---|
-| low | ~16s (15–18) | ~30s (22–52) |
-| medium | ~46s (45–49) | ~25s (23–52) |
-| high | ~138s (137–140) | ~24s (22–90) |
+| low | ~16 с (15–18) | ~30 с (22–52) |
+| medium | ~46 с (45–49) | ~25 с (23–52) |
+| high | ~138 с (137–140) | ~24 с (22–90) |
 
-- **api latency scales with quality** (high takes ~2+ minutes), and timings are stable.
-- **codex runs ~20–90s with high variance and does not scale with quality** — its quality is a non-deterministic hint passed through an agent layer, so a `high` request is not guaranteed to do the same heavy generation as api `high` (codex `high` being fast may mean the quality isn't fully applied). **Use api when you need strict quality/size control or reproducibility.**
-- Larger sizes (e.g. 4K) take proportionally longer.
+- **У api время растёт вместе с качеством** — на `high` уходит больше двух минут, зато результат стабилен.
+- **codex укладывается в 20–90 секунд с большим разбросом и от качества почти не зависит.** Качество для него — это недетерминированная подсказка, проходящая через слой агента, поэтому запрос `high` не гарантирует такую же тяжёлую генерацию, как `high` у api: если codex отработал быстро, качество, скорее всего, применилось не полностью. **Когда нужен строгий контроль качества и размера или воспроизводимость, используйте api.**
+- Большие размеры вроде 4K занимают пропорционально больше времени.
 
-## Troubleshooting
+## Если что-то не работает
 
-Run `ccskill-gptimage doctor` for a quick diagnosis of your environment and backends. It never reads secret files (`.env` / Codex credentials) — checks are presence-based, and the definitive test is running an actual generation.
+Быстрая диагностика окружения и backend:
 
-| Symptom | Fix |
+```bash
+ccskill-gptimage doctor
+```
+
+Команда никогда не читает содержимое секретных файлов — ни `.env`, ни учётные данные Codex. Она проверяет только наличие файлов и переменных, а окончательный ответ даёт реальный запуск генерации.
+
+| Симптом | Что делать |
 |---|---|
-| `403 Forbidden` | OpenAI Organization Verification is incomplete → complete it in Organization Settings |
-| Not sure what's wrong | Run `ccskill-gptimage doctor` |
+| `403 Forbidden` | Не пройдена верификация организации OpenAI — завершите её в Organization Settings |
+| Непонятно, в чём дело | Запустите `ccskill-gptimage doctor` |
+| На Windows backend codex не работает | В этом форке уже починено. Если вы взяли код из апстрима, перенесите сюда коммит `fix: make the codex backend work on Windows` |
 
-## License
+## Лицензия
 
-MIT
+MIT. Copyright (c) 2026 feedtailor Inc. — см. [LICENSE](LICENSE).
