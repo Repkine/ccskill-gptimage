@@ -1,276 +1,283 @@
----
-name: ccskill-gptimage
-description: |
-  Skill for image generation needs.
-  Generate and edit high-quality images via OpenAI gpt-image-2 (ChatGPT Images 2.0).
-  Strong at multilingual text rendering (Japanese included), complex instruction following,
-  reference-image fidelity, and dense-text infographics.
----
+# Скилл генерации изображений ccskill-gptimage
 
-# ccskill-gptimage Image Generation Skill
+[English version](SKILL.en.md) · [日本語版](SKILL.ja.md)
 
-## Overview
+## Общее
 
-Generates and edits images via OpenAI gpt-image-2. **The user only describes intent** — Claude composes the structured prompt, parameters, and cost-optimized choices from conversation and project context. Sister skill: `ccskill-nanobanana` (Gemini 3 Pro Image) — see the comparison table below.
+Генерирует и редактирует изображения через OpenAI gpt-image-2. **Пользователь описывает только замысел** — структурированный промпт, параметры и выгодные по стоимости решения Claude собирает сам из разговора и контекста проекта. Родственный скилл — `ccskill-nanobanana` на Gemini 3 Pro Image, сравнение в таблице ниже.
 
-## Prerequisites
+> Форк [feedtailor/ccskill-gptimage](https://github.com/feedtailor/ccskill-gptimage): добавлена работоспособность под Windows, параметр `--codex-resume` и русский перевод.
 
-- The repo's `./install.sh` has been run — it deploys the `ccskill-gptimage` command to `~/.local/bin` (PATH) and registers this skill at the user level. If the command is not found, fall back to direct invocation: `$CCSKILL_GPTIMAGE_DIR/venv/bin/python $CCSKILL_GPTIMAGE_DIR/generate_image.py ...` (requires the `CCSKILL_GPTIMAGE_DIR` env var pointing at the repo).
-- **At least one backend must be available:**
-  - **Codex CLI** (recommended for ChatGPT subscribers): `brew install codex` + `codex login`. No API key, no extra billing.
-  - **OpenAI API key**: set `OPENAI_API_KEY` (env or `.env` in the repo). Your **Organization must be Verified** (unverified orgs get 403).
-- Default `--backend auto` prefers Codex, falls back to API on failure. Force a specific path with `--backend codex` or `--backend api`.
+## Предварительные условия
 
-## Usage
+- В репозитории выполнен `./install.sh` — он кладёт команду `ccskill-gptimage` в `~/.local/bin` (то есть в PATH) и регистрирует скилл на уровне пользователя. Если команда не находится, вызывайте напрямую: `$CCSKILL_GPTIMAGE_DIR/venv/bin/python $CCSKILL_GPTIMAGE_DIR/generate_image.py ...` — потребуется переменная окружения `CCSKILL_GPTIMAGE_DIR`, указывающая на репозиторий. На Windows путь к интерпретатору другой: `venv\Scripts\python.exe`.
+- **Нужен хотя бы один рабочий backend:**
+  - **Codex CLI** — рекомендуется при подписке ChatGPT: `brew install codex` (на Windows `npm install -g @openai/codex`), затем `codex login`. Ключ не нужен, дополнительной оплаты нет.
+  - **Ключ OpenAI API** — переменная `OPENAI_API_KEY` в окружении или в `.env` репозитория. **Организация должна быть верифицирована**, иначе придёт 403.
+- По умолчанию `--backend auto`: сначала Codex, при неудаче откат на API. Принудительно — `--backend codex` или `--backend api`.
+
+## Как вызывать
 
 ```bash
-ccskill-gptimage generate "prompt"
+ccskill-gptimage generate "промпт"
 ```
 
-### Options
+### Параметры
 
-| Option | Description | Default | Values |
+| Параметр | Описание | По умолчанию | Значения |
 |---|---|---|---|
-| `--size` | Output size (`auto` or free `WxH`; see Resolution constraints) | `1024x1024` | `auto` / `1024x1024` / `1024x1536` / `1536x1024` / up to `3840x2160` (4K) |
-| `--quality` | Quality | `auto` | `auto` / `low` / `medium` / `high` |
-| `--background` | Background | `auto` | `auto` / `opaque` (for `transparent` use `--model gpt-image-1.5`) |
-| `--output-format` | Output format | `png` | `png` / `jpeg` / `webp` |
-| `--output-compression` | Compression (jpeg/webp) | none | 0-100 |
-| `--output` | Output directory | `./generated_images` | any path |
-| `--output-name` | Output filename stem (extension auto) | timestamp | any string |
-| `--reference` | Reference image (repeatable) | none | image file path |
-| `--mask` | Mask image (transparent area editable; requires `--reference`) | none | image file path |
-| `--input-fidelity` | Not needed for gpt-image-2 (auto max). Only for `gpt-image-1.5` | none | `high` / `low` |
-| `--moderation` | Moderation level | `auto` | `auto` / `low` |
-| `--model` | Model ID | `gpt-image-2` | any model ID |
-| `--backend` | Generation backend | `auto` | `auto` (Codex preferred, API fallback) / `codex` (force Codex CLI) / `api` (force OpenAI API) |
+| `--size` | Размер: `auto` или произвольный `WxH`, см. раздел об ограничениях | `1024x1024` | `auto` / `1024x1024` / `1024x1536` / `1536x1024` / до `3840x2160` (4K) |
+| `--quality` | Качество | `auto` | `auto` / `low` / `medium` / `high` |
+| `--background` | Фон | `auto` | `auto` / `opaque`; для `transparent` нужна `--model gpt-image-1.5` |
+| `--output-format` | Формат вывода | `png` | `png` / `jpeg` / `webp` |
+| `--output-compression` | Сжатие для jpeg и webp | нет | 0–100 |
+| `--output` | Каталог вывода | `./generated_images` | любой путь |
+| `--output-name` | Имя файла без расширения | метка времени | любая строка |
+| `--reference` | Референс, можно повторять | нет | путь к файлу изображения |
+| `--mask` | Маска: прозрачная область редактируется, требует `--reference` | нет | путь к файлу изображения |
+| `--input-fidelity` | Для gpt-image-2 не нужен, точность всегда максимальная. Только для `gpt-image-1.5` | нет | `high` / `low` |
+| `--moderation` | Уровень модерации | `auto` | `auto` / `low` |
+| `--model` | ID модели | `gpt-image-2` | любой ID модели |
+| `--backend` | Backend генерации | `auto` | `auto` — сначала Codex, откат на API; `codex`; `api` |
+| `--codex-resume` | ID сессии Codex для продолжения серии в одном стиле. Только с `--backend codex`. Есть только в этом форке | нет | ID из строки `[Session] <id>` |
 
-### Quick examples
+### Короткие примеры
 
 ```bash
-# text-to-image (generation)
+# Генерация по тексту
 ccskill-gptimage generate \
-  "A minimalist editorial poster with the exact title \"腹落ちDMARC\" in large serif Japanese font at the top, dark navy background" \
+  "A minimalist editorial poster with the exact title \"ГЛАВНОЕ\" in large serif font at the top, dark navy background" \
   --size 1024x1536 --quality high
 
-# reference editing
+# Редактирование по референсу
 ccskill-gptimage generate \
   "Replace only the background with a neon Tokyo street at night. Preserve the person's face and pose exactly as in the reference." \
   --reference ./portrait.png --quality high
 ```
 
-For **use-case–specific prompt patterns and complete examples**, see the [Use Case Index](#use-case-index) below — each use case points to a file under `prompts/` with Cookbook-sourced prompts you can reuse.
+**Готовые схемы промптов под конкретные задачи** — в [указателе сценариев](#указатель-сценариев) ниже: каждая строка ведёт к файлу в `prompts/` с промптами из Cookbook, готовыми к переиспользованию.
 
 ---
 
-## Prompt Design — 10 Principles (OpenAI Cookbook Section 2)
+## Десять принципов построения промпта (Cookbook, раздел 2)
 
-Source: [GPT Image Generation Models Prompting Guide](https://developers.openai.com/cookbook/examples/multimodal/image-gen-models-prompting-guide) (retrieved 2026-04-23). Each principle below is a direct Cookbook recommendation; details and example prompts are in `prompts/*.md`.
+Источник: [GPT Image Generation Models Prompting Guide](https://developers.openai.com/cookbook/examples/multimodal/image-gen-models-prompting-guide), сверено 23 апреля 2026. Каждый пункт — прямая рекомендация Cookbook; подробности и примеры в `prompts/*.md`.
 
-1. **Structure + Goal** — order as `background/scene → subject → key details → constraints`. Include the intended use (ad, UI mock, infographic) to set mode and polish.
-2. **Prompt Format** — paragraph / JSON / tag / bullets all work. Pick what's easiest to maintain.
-3. **Specificity + Quality Cues** — be concrete about materials, shapes, textures, medium. For photorealism, put `photorealistic` directly in the prompt. Specify **physical scale / aspect ratio numerically** (`about 8–9 inches tall`, `A4 size`, `portrait 3:1`, `smartphone-sized`) — concrete dimensions stabilize proportions far better than vague `tall`/`small` (verified in macaroni-package composite dogfooding).
-4. **Latency vs Fidelity** — start with `quality='low'` while iterating. For small text, infographics, close-up portraits, compare `medium`/`high` before shipping.
-5. **Composition** — specify framing (close-up, wide, top-down), angle (eye-level, low-angle), lighting (soft diffuse, golden hour), and placement (`logo top-right`, `subject centered`).
-6. **People, Pose, and Action** — describe scale, body framing, gaze, object interactions (e.g. `full body visible, feet included`, `looking down at the book, not at the camera`).
-7. **Constraints — what to change vs preserve** — state exclusions explicitly (`no watermark`, `no extra text`). For edits, say `change only X` + `keep everything else the same`, and repeat the preserve list each iteration.
-8. **Text in Images** — put literal strings in **quotes** or **ALL CAPS** + specify typography (font style, size, color, placement). For tricky words, spell letter-by-letter. Use `medium`/`high` for small text.
-9. **Multi-Image Inputs** — reference each input by **index + description** (`Image 1: product photo…, Image 2: style reference…`) and describe interaction (`apply Image 2's style to Image 1`).
-10. **Iterate Instead of Overloading** — start clean, refine with **small single-change follow-ups** (`make lighting warmer`, `remove the extra tree`) instead of mega-prompts.
+1. **Структура и цель.** Порядок такой: фон и сцена → объект → ключевые детали → ограничения. Указывайте назначение — реклама, макет интерфейса, инфографика: это задаёт режим и степень проработки.
+2. **Формат промпта.** Работают и абзац, и JSON, и теги, и списки. Берите то, что удобнее поддерживать.
+3. **Конкретика и указатели качества.** Точно называйте материалы, формы, фактуры, технику. Для фотореализма пишите `photorealistic` прямо в промпте. **Физический масштаб и пропорции задавайте числами** — «высотой около 20 см», «формат A4», «вертикальный 3:1», «размером со смартфон». Конкретные размеры стабилизируют пропорции куда лучше расплывчатых «высокий» и «маленький». Проверено на составной карточке упаковки макарон.
+4. **Задержка против точности.** Пока идёт перебор вариантов, держите `quality='low'`. Для мелкого текста, инфографики и крупных портретов перед финалом сравните `medium` и `high`.
+5. **Композиция.** Задавайте кадр — крупный план, общий план, вид сверху; ракурс — на уровне глаз, снизу; свет — мягкий рассеянный, золотой час; и расположение — «логотип справа сверху», «объект по центру».
+6. **Люди, поза, действие.** Описывайте масштаб, границы кадра по телу, направление взгляда, взаимодействие с предметами: «в полный рост, ступни в кадре», «смотрит в книгу, не в камеру».
+7. **Что менять, а что сохранить.** Исключения проговаривайте явно: «без водяных знаков», «без лишнего текста». Для редактирования пишите «измени только X» плюс «всё остальное оставь как есть», и повторяйте список сохраняемого на каждой итерации.
+8. **Текст на изображении.** Точные строки берите **в кавычки** или пишите **КАПСОМ**, отдельно задавайте типографику: начертание, кегль, цвет, положение. Для сложных слов диктуйте по буквам. Мелкий текст требует `medium` или `high`.
+9. **Несколько входных изображений.** Ссылайтесь на каждое по **номеру и описанию** — «Image 1: фото товара…, Image 2: референс стиля…» — и описывайте взаимодействие: «примени стиль Image 2 к Image 1».
+10. **Итерации вместо перегруза.** Начинайте с чистого промпта и уточняйте **маленькими правками по одному изменению за раз** — «сделай свет теплее», «убери лишнее дерево», — а не гигантским промптом сразу.
 
 ---
 
-## Use Case Index
+## Указатель сценариев
 
-When the user's intent matches a row below, **read the linked file under `prompts/`** to get the Cookbook-sourced prompt pattern, parameters, and gpt-image-2-specific notes. Progressive disclosure: load only what you need.
+Когда замысел пользователя попадает в одну из строк ниже, **прочитайте соответствующий файл в `prompts/`**: там схема промпта из Cookbook, параметры и замечания по gpt-image-2. Принцип постепенного раскрытия: загружайте только нужное.
 
-### Generation (text → image)
+> В файлах `prompts/` пояснения на русском, а сами промпты оставлены на английском намеренно: это дословные примеры из Cookbook, и модель отрабатывает их предсказуемее. Переводить их на русский не требуется — кириллицу модель рисует хорошо, речь только о служебных указаниях.
 
-| Intent | Prompt guide | Recommended params |
+### Генерация: текст → изображение
+
+| Задача | Схема промпта | Рекомендуемые параметры |
 |---|---|---|
-| Infographic / diagram / pitch deck slide / chart | [`prompts/infographics-and-diagrams.md`](prompts/infographics-and-diagrams.md) | `1024x1536` or `1536x1024`, `high` |
-| Photorealistic candid / historical scene | [`prompts/photorealism.md`](prompts/photorealism.md) | `1024x1536`, `medium`–`high` |
-| Logo / brand mark | [`prompts/logo.md`](prompts/logo.md) | `1024x1024`, `high` |
-| Ad / marketing visual / text-in-image | [`prompts/ads-and-marketing.md`](prompts/ads-and-marketing.md) | `1024x1536`, `high` |
-| Comic strip / storyboard | [`prompts/comic-and-storyboard.md`](prompts/comic-and-storyboard.md) | `1024x1536`, `high` |
-| Mobile / Web UI mockup | [`prompts/ui-mockups.md`](prompts/ui-mockups.md) | portrait for mobile, landscape for web, `high` |
-| Character consistency / concept art / keepsake | [`prompts/character-and-concept.md`](prompts/character-and-concept.md) | `1024x1536`, `medium`–`high` |
-| Cultural atmosphere (Japanese signage, streetscapes) | [`prompts/cultural-atmosphere.md`](prompts/cultural-atmosphere.md) | `1024x1536` or `1536x1024`, `high` |
+| Инфографика, схема, слайд презентации, диаграмма | [`prompts/infographics-and-diagrams.md`](prompts/infographics-and-diagrams.md) | `1024x1536` или `1536x1024`, `high` |
+| Фотореалистичная сцена, историческая реконструкция | [`prompts/photorealism.md`](prompts/photorealism.md) | `1024x1536`, `medium`–`high` |
+| Логотип, фирменный знак | [`prompts/logo.md`](prompts/logo.md) | `1024x1024`, `high` |
+| Реклама, маркетинговый визуал, текст на изображении | [`prompts/ads-and-marketing.md`](prompts/ads-and-marketing.md) | `1024x1536`, `high` |
+| Комикс, раскадровка | [`prompts/comic-and-storyboard.md`](prompts/comic-and-storyboard.md) | `1024x1536`, `high` |
+| Макет мобильного или веб-интерфейса | [`prompts/ui-mockups.md`](prompts/ui-mockups.md) | вертикальный для мобильного, горизонтальный для веба, `high` |
+| Единство персонажа, концепт-арт, памятная иллюстрация | [`prompts/character-and-concept.md`](prompts/character-and-concept.md) | `1024x1536`, `medium`–`high` |
+| Культурная атмосфера: вывески, городская среда | [`prompts/cultural-atmosphere.md`](prompts/cultural-atmosphere.md) | `1024x1536` или `1536x1024`, `high` |
 
-### Editing (text + image → image)
+### Редактирование: текст + изображение → изображение
 
-| Intent | Prompt guide | Notes |
+| Задача | Схема промпта | Примечания |
 |---|---|---|
-| Translate in-image text to another language | [`prompts/image-translation.md`](prompts/image-translation.md) | Preserves layout/typography |
-| Apply style from a reference to new content | [`prompts/style-transfer.md`](prompts/style-transfer.md) | 1 reference |
-| Virtual clothing try-on (identity preserved) | [`prompts/try-on.md`](prompts/try-on.md) | Up to 5 references |
-| Sketch → photorealistic render | [`prompts/sketch-to-render.md`](prompts/sketch-to-render.md) | 1 reference |
-| Product extraction / interior object swap | [`prompts/product-mockup.md`](prompts/product-mockup.md) | `--background opaque` |
-| Weather/lighting transform / object removal | [`prompts/scene-transform.md`](prompts/scene-transform.md) | 1 reference |
-| Insert person / multi-image composite | [`prompts/scene-composite.md`](prompts/scene-composite.md) | 1–5 references |
+| Перевод текста на изображении на другой язык | [`prompts/image-translation.md`](prompts/image-translation.md) | Раскладка и типографика сохраняются |
+| Перенос стиля с референса на новое содержание | [`prompts/style-transfer.md`](prompts/style-transfer.md) | 1 референс |
+| Виртуальная примерка одежды с сохранением внешности | [`prompts/try-on.md`](prompts/try-on.md) | до 5 референсов |
+| Скетч → фотореалистичный рендер | [`prompts/sketch-to-render.md`](prompts/sketch-to-render.md) | 1 референс |
+| Вырезание товара, подмена предмета в интерьере | [`prompts/product-mockup.md`](prompts/product-mockup.md) | `--background opaque` |
+| Смена погоды и освещения, удаление объектов | [`prompts/scene-transform.md`](prompts/scene-transform.md) | 1 референс |
+| Вставка человека, композиция из нескольких изображений | [`prompts/scene-composite.md`](prompts/scene-composite.md) | 1–5 референсов |
 
-See [`prompts/README.md`](prompts/README.md) for the full catalog and cross-references.
+Полный каталог и перекрёстные ссылки — в [`prompts/README.md`](prompts/README.md).
 
 ---
 
-## gpt-image-2 specific constraints (memorize these)
+## Ограничения gpt-image-2, которые надо помнить
 
-These apply to **every** use case and are critical context when composing prompts.
+Они действуют в **каждом** сценарии и критичны при составлении промпта.
 
-### No transparent background
+### Прозрачный фон недоступен
 
-`--background transparent` returns 400. To produce transparent PNG, pick one of:
+`--background transparent` возвращает 400. Прозрачный PNG получают одним из трёх способов:
 
-1. **Post-process with `rembg`** (recommended — preserves gpt-image-2's text-rendering and layout strengths):
+1. **Постобработка через `rembg`** — рекомендуется, потому что сохраняет сильные стороны gpt-image-2 в отрисовке текста и раскладке:
    ```bash
    ccskill-gptimage generate "... on plain white background"
    rembg i generated_images/<image>.png generated_images/<image>_alpha.png
    ```
-2. **Switch to `gpt-image-1.5`** (supports `--background transparent` natively)
-3. **Use `ccskill-nanobanana`**
+2. **Переход на `gpt-image-1.5`** — эта модель поддерживает `--background transparent` штатно.
+3. **Использование `ccskill-nanobanana`.**
 
-### `input_fidelity` is unnecessary (auto max fidelity)
+### `input_fidelity` не нужен: точность и так максимальная
 
-gpt-image-2 **always processes input images at maximum fidelity automatically**. Specifying `--input-fidelity` returns 400. This is a feature, not a missing parameter — reference preservation is in fact strong. Just write explicit `Preserve …` clauses in the prompt.
+gpt-image-2 **всегда автоматически обрабатывает входные изображения с максимальной точностью**. Указание `--input-fidelity` возвращает 400. Это не отсутствующая возможность, а свойство модели: сохранение референса у неё и без того сильное. Достаточно писать в промпте явные «сохрани …».
 
-> **Note**: The Cookbook's edit-chapter examples (5.6, 5.7, 5.8, 5.9) show `input_fidelity="high"` in their parameter blocks. **Do not carry this parameter over when using gpt-image-2** — this skill's CLI validator strips it automatically if provided, but cleaner to omit it from prompts/scripts altogether.
+> **Замечание.** В примерах главы о редактировании в Cookbook — разделы 5.6, 5.7, 5.8, 5.9 — в блоках параметров стоит `input_fidelity="high"`. **Для gpt-image-2 этот параметр переносить не нужно.** Валидатор скилла отбрасывает его сам, но чище вовсе не писать его ни в промптах, ни в скриптах.
 
-Trade-off: input-image tokens grow with auto-max-fidelity, so **don't pass unnecessary references** — it costs more.
+### Edit API всегда перерисовывает весь холст
 
-### Edit API always regenerates the full canvas
+Даже с маской эндпоинт редактирования gpt-image-2 заново отрисовывает каждый пиксель. Cookbook формулирует это так: маскирование целиком опирается на промпт, модель использует маску как ориентир и может не следовать её форме с полной точностью.
 
-Even with a mask, gpt-image-2's edit endpoint re-renders every pixel. Cookbook quote:
+Автоматическая максимальная точность обычно сохраняет области вне цели вплоть до текста интерфейса и серийных номеров, но попиксельного совпадения не гарантирует. Когда это важно, см. [стратегию локального редактирования](#стратегия-локального-редактирования).
 
-> "Masking with GPT Image is entirely prompt-based. The model uses the mask as guidance, but may not follow its exact shape with complete precision."
+### Прочие ограничения
 
-The auto-max-fidelity typically preserves non-target regions down to UI text and serial numbers — but it's not pixel-perfect. See [Local editing strategy](#local-editing-strategy) below for when this matters.
-
-### Other constraints
-
-- **Organization Verification required** (unverified → 403)
-- **Rate limits**: Tier 1 = 5 IPM (production needs Tier 3+)
-- **Timeout**: up to 2 min for high-quality/complex prompts — set SDK timeout ≥ 120 s
-- **Response**: `b64_json` only (no URLs)
-- **Not supported**: function calling, structured outputs
-- **Resolution**: `--size` accepts `auto` or any `WxH`, validated against gpt-image-2's constraints — **each side a multiple of 16**, **longest side ≤ 3840px** (up to 4K, e.g. `3840x2160`), **aspect ratio ≤ 3:1**, **total pixels 655,360–8,294,400**. Violations are rejected with a specific error *before* any API call. `--backend api` honors the exact size; `--backend codex` is non-deterministic and only warns. Common presets: `1024x1024 / 1024x1536 / 1536x1024`. (Verified 2026-06-11: `3840x2160` generated at exact resolution via `--backend api`.)
+- **Обязательна верификация организации** — без неё 403.
+- **Лимиты запросов:** Tier 1 — 5 изображений в минуту, для боевых задач нужен Tier 3 и выше.
+- **Таймаут:** до двух минут на сложных промптах с высоким качеством; таймаут SDK ставьте от 120 секунд.
+- **Ответ:** только `b64_json`, ссылок не возвращается.
+- **Не поддерживаются:** function calling и структурированный вывод.
+- **Разрешение:** `--size` принимает `auto` или произвольный `WxH`, проверяемый по ограничениям gpt-image-2 — **каждая сторона кратна 16**, **длинная сторона до 3840px** (то есть до 4K, например `3840x2160`), **соотношение сторон до 3:1**, **общее число пикселей 655 360 … 8 294 400**. Нарушения отсекаются с конкретной ошибкой *до* обращения к API. `--backend api` соблюдает размер точно, `--backend codex` недетерминирован и только предупреждает. Частые заготовки: `1024x1024`, `1024x1536`, `1536x1024`. Проверено 11 июня 2026: `3840x2160` через `--backend api` выдаётся в точном разрешении.
 
 ---
 
-## Local editing strategy
+## Стратегия локального редактирования
 
-When the user wants to edit only a small region of an existing image (e.g. anonymize a map inside a UI screenshot), choose based on how strictly the surroundings must stay:
+Когда нужно изменить лишь небольшой участок готового изображения — например, обезличить карту внутри скриншота интерфейса, — выбирайте подход по тому, насколько строго обязано сохраниться окружение.
 
-| Goal | Recommended approach |
+| Цель | Подход |
 |---|---|
-| Replace one region; surroundings redrawn at very high fidelity but not pixel-identical (UI text usually survives) | `--reference` + strong `Preserve absolutely everything else exactly as in the reference: …` prompt that **enumerates** the surrounding elements (headers, dates, button labels, logos, quoted text). Often good enough for blogs / docs. |
-| Re-render only one small area; other areas should be left as-is, but the model has a strong visual bias on the target area | `--reference` + `--mask` (see "Mask edit" below). Mask shape is **soft guidance**, not strict — but localizing the model's attention often improves the chance of overriding interpretation bias on small ambiguous objects. |
-| **Pixel-perfect** preservation outside the edited region (legal evidence, regulated screenshots) | **Hybrid: crop → edit → paste back** with Pillow / ImageMagick. gpt-image-2 only edits the cropped tile; the rest is untouched bit-for-bit. |
-| Composite from multiple images | `--reference a.png --reference b.png …` (no mask) + goal-oriented prompt. See `prompts/scene-composite.md`. |
+| Заменить один участок; окружение перерисовывается с очень высокой точностью, но не попиксельно (текст интерфейса обычно выживает) | `--reference` плюс сильное указание «сохрани абсолютно всё остальное ровно как на референсе», где **перечислены** окружающие элементы: заголовки, даты, подписи кнопок, логотипы, цитаты. Для блога и документации обычно достаточно. |
+| Перерисовать только небольшую область; остальное оставить как есть, но у модели стойкое неверное прочтение объекта | `--reference` плюс `--mask`, см. ниже. Форма маски — мягкий ориентир, а не жёсткая граница, но сосредоточение внимания модели часто помогает переломить неверную трактовку мелкого объекта. |
+| **Попиксельная** сохранность всего за пределами правки: юридические доказательства, регламентированные скриншоты | **Гибрид: вырезать → отредактировать → вклеить обратно** через Pillow или ImageMagick. gpt-image-2 редактирует только вырезанный фрагмент, остальное остаётся неизменным побайтово. |
+| Композиция из нескольких изображений | `--reference a.png --reference b.png …` без маски плюс промпт, описывающий цель. См. `prompts/scene-composite.md`. |
 
-Two prompt patterns for approach 1:
+Две схемы промпта для первого подхода:
 
-- **Enumerate what to preserve** — list every visible element by name and quoted text. The more you name, the stronger the preservation.
-- **Replace only X** — `"Replace ONLY the map area with [fictional content]. Do not change any layout, font, color, or text outside the map rectangle."`
+- **Перечислить сохраняемое** — назвать каждый видимый элемент и процитировать надписи. Чем больше названо, тем сильнее сохранность.
+- **Заменить только X** — «Replace ONLY the map area with [вымышленное содержимое]. Do not change any layout, font, color, or text outside the map rectangle.»
 
-Real-world validation: single `--reference --quality high` call has been observed to replace a map area inside an Apple Business "lost mode location" screenshot with fictional content while preserving surrounding UI down to device serial numbers — small UI text at output resolution remains readable.
+Практическая проверка: один вызов `--reference --quality high` заменил область карты внутри скриншота Apple Business с местоположением потерянного устройства на вымышленное содержимое, сохранив окружающий интерфейс вплоть до серийных номеров устройства; мелкий текст остался читаемым в выходном разрешении.
 
-### Mask edit — focused regeneration of a small region
+### Редактирование по маске — точечная перерисовка небольшой области
 
-Pass an alpha-channel PNG with `--mask`. Transparent pixels (`alpha = 0`) are the **editable region**, opaque pixels are protected. Per the OpenAI Cookbook:
+Передайте PNG с альфа-каналом через `--mask`. Прозрачные пиксели (`alpha = 0`) — **редактируемая область**, непрозрачные защищены. Cookbook подчёркивает, что маскирование целиком опирается на промпт: модель использует маску как ориентир и может не следовать её форме точно.
 
-> "Masking with GPT Image is entirely prompt-based. The model uses the mask as guidance, but may not follow its exact shape with complete precision."
+Отсюда следует:
 
-This means:
-- The mask **does not strictly protect** pixels outside the transparent region — but in practice, opaque areas are kept very close to the input
-- The mask **does help focus** the model's attention to the editable region, often overriding visual interpretation bias on the target area
-- Effects are **not guaranteed** — masks may improve a stubborn small-region issue, or may not
+- маска **не защищает жёстко** пиксели за пределами прозрачной области, хотя на практике непрозрачные участки остаются очень близкими к исходнику;
+- маска **помогает сосредоточить** внимание модели на редактируемой области и нередко ломает неверную трактовку объекта;
+- эффект **не гарантирован**: маска может вытянуть упрямую проблему с маленькой областью, а может и не сработать.
 
-#### Workflow recommendation
+#### Порядок работы
 
-Mask creation is **outside this skill's scope** — produce the mask using your favorite image editor (Pixelmator / Photoshop / GIMP / Preview is generally too limited). Iterate with cheap quality first:
+Подготовка маски **за пределами этого скилла** — делайте её в привычном редакторе: Pixelmator, Photoshop, GIMP; штатного «Просмотра» в macOS обычно не хватает. Перебирайте варианты на дешёвом качестве:
 
-1. **Mask creation** — open the base image in an image editor, fill the editable area with full transparency (alpha = 0), keep the rest fully opaque, export as PNG with the same dimensions as the base
-2. **Try cheaply** — run `--mask <mask.png> --reference <base.png> --quality low` (or `medium`) a few times with different prompts. Cost ¥1–¥12 per try
-3. **Promote winners to high** — when an iteration looks promising, re-run with `--quality high` for the final asset, or pass the chosen iteration as a new `--reference` for further refinement
+1. **Сделать маску** — открыть исходник в редакторе, залить редактируемую область полной прозрачностью (`alpha = 0`), остальное оставить полностью непрозрачным, экспортировать в PNG того же размера, что и исходник.
+2. **Пробовать дёшево** — несколько запусков `--mask <mask.png> --reference <base.png> --quality low` или `medium` с разными промптами. Стоимость попытки — единицы рублей.
+3. **Удачное поднимать до high** — когда вариант выглядит перспективно, перезапустить его с `--quality high` для финального файла либо передать выбранную итерацию новым `--reference` для дальнейшей доводки.
 
-#### Real-world validation
+#### Практическая проверка
 
-Replacing a small ambiguous foreground object (a Japanese ceramic chopstick rest that gpt-image-2 kept misinterpreting as fork prongs in 4 successive `--reference`-only edits) was visibly improved by adding `--mask` over that region. Result was not perfect but moved clearly toward the intended ceramic shape — confirming masks are useful for **breaking through stubborn interpretation bias on small regions**, even if not pixel-precise.
+Замена маленького неоднозначного объекта на переднем плане — японской керамической подставки для палочек, которую gpt-image-2 четыре правки подряд упорно принимал за зубцы вилки, — заметно улучшилась после добавления `--mask` на эту область. Результат не стал идеальным, но явно сдвинулся к нужной керамической форме. Это подтверждает: маски полезны, чтобы **пробить стойкую неверную трактовку небольшой области**, даже не будучи попиксельно точными.
 
 ---
 
-## Backend selection (`--backend`)
+## Выбор backend (`--backend`)
 
-Two transports reach the same `gpt-image-2` model. Pick automatically (`auto`) or pin one.
+Два транспорта ведут к одной и той же модели `gpt-image-2`. Можно выбирать автоматически (`auto`) или закрепить один.
 
-| Backend | When to use | Cost | Caveats |
+| Backend | Когда использовать | Стоимость | Оговорки |
 |---|---|---|---|
-| `codex` | ChatGPT subscriber with Codex CLI installed | Subscription quota (no extra billing) | Pixel-exact `--size` not guaranteed (agent-mediated); `--mask` not supported |
-| `api` | Has `OPENAI_API_KEY` + Verified Organization | Pay-as-you-go ($0.006–$0.211/image) | All parameters honored exactly |
-| `auto` (default) | Either or both | Codex first, then API | Falls back to API if Codex fails *and* `OPENAI_API_KEY` is present |
+| `codex` | Есть подписка ChatGPT и установленный Codex CLI | Квота подписки, отдельной оплаты нет | Точный `--size` не гарантирован, потому что идёт через агента; `--mask` не поддерживается |
+| `api` | Есть `OPENAI_API_KEY` и верифицированная организация | Оплата по факту, 0,006–0,211 $ за изображение | Все параметры соблюдаются точно |
+| `auto` (по умолчанию) | Есть одно или оба | Сначала Codex, потом API | Откат на API происходит, если Codex не справился *и* задан `OPENAI_API_KEY` |
 
-When the user has *both* available, prefer `auto` — Codex saves money, API catches anything Codex can't do.
+Когда доступно и то и другое, предпочтительнее `auto`: Codex экономит деньги, API подхватывает всё, чего Codex не умеет.
 
-**Force `--backend api` when**:
-- `--mask` is needed (Codex can't pass masks)
-- Pixel-exact `--size` is required (Codex's image_gen tool may return slightly different dimensions)
-- Strict reproducibility is needed (Codex's agentic layer adds non-determinism)
+**Принудительно ставьте `--backend api`, когда:**
 
-Cost optimization advice (below) applies to **both** backends — the pricing difference is *who pays* (you per-image vs. ChatGPT subscription quota), not the model behavior.
+- нужна маска — Codex её не передаёт;
+- нужен точный `--size` — инструмент image_gen у Codex может вернуть слегка другие размеры;
+- нужна строгая воспроизводимость — агентный слой Codex добавляет недетерминированность.
+
+Советы по стоимости ниже относятся к **обоим** backend: разница в том, *кто платит* — вы за каждое изображение или квота подписки ChatGPT, — а не в поведении модели.
+
+### Серия слайдов в едином стиле (только в этом форке)
+
+У gpt-image-2 нет seed, поэтому отдельные вызовы дают расходящийся стиль. Параметр `--codex-resume` продолжает ту же сессию Codex, и ранее сгенерированное изображение остаётся в контексте треда:
+
+```bash
+ccskill-gptimage generate "Слайд 1: обложка" --backend codex
+# в выводе появится строка [Session] <id>
+ccskill-gptimage generate "Слайд 2: состав" --backend codex --codex-resume <id>
+```
+
+В промпт при этом автоматически добавляется указание наследовать палитру, градиенты, гарнитуру и обработку рамки, но не копировать композицию, объект и текст — иначе агент просто перерисует предыдущий слайд. ID сессии пишется и в JSON-сайдкар, поле `codex_session_id`.
 
 ---
 
-## Cost optimization
+## Оптимизация стоимости
 
-Iterate with `--quality low` ($0.006/image). Ship with `medium` ($0.053) or `high` ($0.211).
+Перебирайте на `--quality low` (0,006 $ за изображение). Финал делайте на `medium` (0,053 $) или `high` (0,211 $).
 
-**Counter-intuitive**: portrait `1024×1536` at `high` is **$0.165** — *cheaper* than square `1024×1024` at `high` ($0.211). Prefer portrait whenever the use case allows.
+**Вопреки интуиции:** вертикальный `1024×1536` на `high` стоит **0,165 $** — *дешевле* квадратного `1024×1024` на `high` (0,211 $). Выбирайте вертикальный формат везде, где задача это допускает.
 
-| Quality | 1024×1024 | 1024×1536 | 1536×1024 |
+| Качество | 1024×1024 | 1024×1536 | 1536×1024 |
 |---|---|---|---|
-| low | $0.006 | $0.011 | $0.011 |
-| medium | $0.053 | $0.080 | $0.079 |
-| high | $0.211 | **$0.165** | $0.210 |
+| low | 0,006 $ | 0,011 $ | 0,011 $ |
+| medium | 0,053 $ | 0,080 $ | 0,079 $ |
+| high | 0,211 $ | **0,165 $** | 0,210 $ |
 
 ---
 
-## Sister skill comparison
+## Сравнение с родственным скиллом
 
-| Use case | First choice | Reason |
+| Задача | Что выбрать | Почему |
 |---|---|---|
-| Posters with Japanese/kanji text | **ccskill-gptimage** | Strongest text rendering |
-| Business infographics / pitch slides | **ccskill-gptimage** | Strong instruction following + text layout |
-| Editing / partial modification | **ccskill-gptimage** | Auto max input fidelity |
-| Photo / illustration single visuals | Either | Comparable cost |
-| Transparent PNG (logos, icons, sprites) | Either | gpt-image-2 can't natively, but (a) `--model gpt-image-1.5`, (b) `rembg` post-processing, (c) ccskill-nanobanana all work |
-| 4K output | Either | gpt-image-2 supports up to 4K (`3840x2160`, longest side ≤ 3840px) via `--backend api`; nanobanana also works |
+| Плакаты с текстом, в том числе кириллицей и иероглифами | **ccskill-gptimage** | Сильнейшая отрисовка текста |
+| Деловая инфографика, слайды презентаций | **ccskill-gptimage** | Хорошо следует инструкциям и держит раскладку текста |
+| Редактирование и частичные правки | **ccskill-gptimage** | Автоматическая максимальная точность по входному изображению |
+| Одиночные фото и иллюстрации | Любой | Стоимость сопоставима |
+| Прозрачный PNG: логотипы, иконки, спрайты | Любой | Штатно gpt-image-2 не умеет, но работают все три пути: `--model gpt-image-1.5`, постобработка `rembg`, ccskill-nanobanana |
+| Вывод в 4K | Любой | gpt-image-2 даёт до 4K (`3840x2160`, длинная сторона до 3840px) через `--backend api`; nanobanana тоже подходит |
 
 ---
 
-## Output
+## Что получается на выходе
 
-Each image is saved alongside a **metadata JSON sidecar** (`{name}.{ext}.json`) containing the prompt, `revised_prompt`, parameters, and timestamp — useful for reproduction and refinement.
+Рядом с каждым изображением сохраняется **JSON-сайдкар** (`{имя}.{расширение}.json`) с промптом, `revised_prompt`, параметрами и меткой времени — это нужно для воспроизведения и доработки.
 
-`revised_prompt`: gpt-image-2 may return a paraphrased prompt. This skill prints it as `[Revised] ...` and saves it to the sidecar. Use it as a signal to refine follow-up prompts.
+`revised_prompt`: gpt-image-2 может вернуть переформулированный промпт. Скилл печатает его как `[Revised] ...` и сохраняет в сайдкар. Используйте его как подсказку для уточнения следующих промптов.
 
-## Browsing generated images
+## Просмотр созданных изображений
 
-Every image is also copied into a shared gallery store (`~/.ccskill-gptimage/gallery`, override with `CCSKILL_GPTIMAGE_GALLERY_DIR`) alongside `ccskill-nanobanana` and `ccskill-omniflash` output. Install [ccskill-gallery](https://github.com/feedtailor/ccskill-gallery) and run:
+Каждое изображение копируется в общее хранилище (`~/.ccskill-gptimage/gallery`, переопределяется переменной `CCSKILL_GPTIMAGE_GALLERY_DIR`) вместе с результатами `ccskill-nanobanana` и `ccskill-omniflash`. Поставьте [ccskill-gallery](https://github.com/feedtailor/ccskill-gallery) и выполните:
 
 ```bash
 ccskill-gptimage browse
 ```
 
-This delegates to `ccskill-gallery browse` (`--port`/`--bind`/`--no-open` pass through). Without ccskill-gallery installed, it just prints where the images are stored.
+Команда передаёт работу `ccskill-gallery browse`, параметры `--port`, `--bind` и `--no-open` проходят насквозь. Без установленного ccskill-gallery она просто печатает, где лежат изображения.
 
-## Troubleshooting
+## Если что-то не работает
 
-- **Not sure what's wrong?** → run `ccskill-gptimage doctor` for a quick environment + backend diagnosis (it never reads secret files; reports are presence-based)
-- **Claude Code keeps asking permission to run `ccskill-gptimage`** → add `Bash(ccskill-gptimage:*)` to `permissions.allow` in `~/.claude/settings.json` (the installer intentionally does not modify your settings)
-- **403 Forbidden** → check Org Verification
-- **Rate limit** → upgrade tier or use `--quality low` while iterating
-- **Timeout** → check network; set SDK timeout ≥ 120 s
-- **Japanese text broken** → wrap in quotes; specify font (`serif Japanese font`); use `quality=high`
-- **400 on `--input-fidelity`** → omit it (gpt-image-2 auto max fidelity); only valid for `--model gpt-image-1.5`
-- **400 on `--background transparent`** → see [transparent section](#no-transparent-background)
-- **"Image not found" with Codex backend** → newer Codex CLI (v0.141.0+) returns the image in the session log instead of writing a file, so older versions of this skill fail to recover it. Run `git pull` in the repo to update.
+- **Непонятно, в чём дело** — запустите `ccskill-gptimage doctor`: быстрая диагностика окружения и backend. Секретные файлы она не читает, проверки основаны только на факте наличия.
+- **Claude Code постоянно спрашивает разрешение на `ccskill-gptimage`** — добавьте `Bash(ccskill-gptimage:*)` в `permissions.allow` файла `~/.claude/settings.json`. Установщик намеренно не трогает ваши настройки.
+- **403 Forbidden** — проверьте верификацию организации.
+- **Превышен лимит запросов** — поднимите Tier или перебирайте на `--quality low`.
+- **Таймаут** — проверьте сеть, поставьте таймаут SDK от 120 секунд.
+- **Ломается кириллица или иероглифы в тексте** — берите строку в кавычки, задавайте начертание («serif», «рубленый»), ставьте `quality=high`.
+- **400 на `--input-fidelity`** — уберите параметр: у gpt-image-2 точность и так максимальная, он валиден только для `--model gpt-image-1.5`.
+- **400 на `--background transparent`** — см. [раздел о прозрачности](#прозрачный-фон-недоступен).
+- **С backend Codex пишет, что изображение не найдено** — новые версии Codex CLI (от v0.141.0) возвращают картинку в логе сессии, а не файлом, поэтому старые версии скилла её не находят. Обновитесь через `git pull`.
+- **На Windows backend codex не запускается вовсе** — в этом форке починено. Если код взят из апстрима, перенесите коммит `fix: make the codex backend work on Windows`.

@@ -1,48 +1,50 @@
-# prompts/ — Use-case prompt collection
+# prompts/ — подборка промптов под сценарии
 
-This directory organizes the 23 use cases from the OpenAI Cookbook [GPT Image Generation Models Prompting Guide](https://developers.openai.com/cookbook/examples/multimodal/image-gen-models-prompting-guide) into **14 files consolidated by related use case**.
+Здесь 23 сценария из руководства OpenAI Cookbook [GPT Image Generation Models Prompting Guide](https://developers.openai.com/cookbook/examples/multimodal/image-gen-models-prompting-guide) разложены по **14 файлам, сгруппированным по родственным задачам**.
 
-## Usage (for Claude)
+## Как пользоваться (указание для Claude)
 
-Once you have identified the rough use case in `SKILL.md`, Read the relevant file to pull in the **finished prompt template + parameters + gpt-image-2-specific notes**, and compose it to match the user's intent.
+Определив по `SKILL.md` примерный сценарий, прочитайте нужный файл — оттуда берутся **готовый шаблон промпта, параметры и замечания по gpt-image-2** — и соберите промпт под замысел пользователя.
 
-Each file is meant to be **loaded only when needed** on a progressive-disclosure basis, so there is no need to memorize all of them.
+Каждый файл рассчитан на **загрузку по мере надобности**, по принципу постепенного раскрытия. Держать в голове все сразу не требуется.
 
-## Index
+## Указатель
 
-### Generation (text → image)
+### Генерация: текст → изображение
 
-| File | Use cases covered | Cookbook section |
+| Файл | Что охватывает | Раздел Cookbook |
 |---|---|---|
-| [infographics-and-diagrams.md](infographics-and-diagrams.md) | Infographics / concept diagrams / science & education diagrams / slides & charts | 4.1, 4.9, 4.10 |
-| [photorealism.md](photorealism.md) | Natural photographic rendering / scenes with historical context | 4.3, 4.4 |
-| [logo.md](logo.md) | Brand logos / variant generation (`n`) | 4.5 |
-| [ads-and-marketing.md](ads-and-marketing.md) | Ad visuals / exact-match text in images | 4.6, 5.5 |
-| [comic-and-storyboard.md](comic-and-storyboard.md) | Comics / panel layout / storyboards | 4.7 |
-| [ui-mockups.md](ui-mockups.md) | Mobile/Web app UI mockups | 4.8 |
-| [character-and-concept.md](character-and-concept.md) | Character consistency / holiday cards / toy packaging | 6.2, 6.3, 6.4 |
-| [cultural-atmosphere.md](cultural-atmosphere.md) | Cultural atmosphere (Japanese signage and streetscapes) | Sec.2 + verified (#015) |
+| [infographics-and-diagrams.md](infographics-and-diagrams.md) | Инфографика, концептуальные схемы, научные и учебные диаграммы, слайды и графики | 4.1, 4.9, 4.10 |
+| [photorealism.md](photorealism.md) | Естественная фотографическая подача, сцены с историческим контекстом | 4.3, 4.4 |
+| [logo.md](logo.md) | Логотипы брендов, генерация вариантов через `n` | 4.5 |
+| [ads-and-marketing.md](ads-and-marketing.md) | Рекламные визуалы, точное совпадение текста на изображении | 4.6, 5.5 |
+| [comic-and-storyboard.md](comic-and-storyboard.md) | Комиксы, раскладка кадров, раскадровки | 4.7 |
+| [ui-mockups.md](ui-mockups.md) | Макеты интерфейсов мобильных и веб-приложений | 4.8 |
+| [character-and-concept.md](character-and-concept.md) | Единство персонажа, праздничные открытки, упаковка игрушек | 6.2, 6.3, 6.4 |
+| [cultural-atmosphere.md](cultural-atmosphere.md) | Культурная атмосфера: вывески и городская среда | Раздел 2 плюс проверки (#015) |
 
-### Editing (text + image → image)
+### Редактирование: текст + изображение → изображение
 
-| File | Use cases covered | Cookbook section |
+| Файл | Что охватывает | Раздел Cookbook |
 |---|---|---|
-| [image-translation.md](image-translation.md) | Multilingual translation of in-image text | 4.2 |
-| [style-transfer.md](style-transfer.md) | Apply a reference image's style to different content | 5.1 |
-| [try-on.md](try-on.md) | Change a person's clothing (identity preserved) | 5.2 |
-| [sketch-to-render.md](sketch-to-render.md) | Hand-drawn sketch → photorealistic | 5.3 |
-| [product-mockup.md](product-mockup.md) | Product extraction & background removal / precise interior replacement | 5.4, 6.1 |
-| [scene-transform.md](scene-transform.md) | Weather & time-of-day change / object removal | 5.6, 5.7 |
-| [scene-composite.md](scene-composite.md) | Person into a new scene / multi-image compositing | 5.8, 5.9 |
+| [image-translation.md](image-translation.md) | Перевод текста на изображении на другой язык | 4.2 |
+| [style-transfer.md](style-transfer.md) | Перенос стиля с референса на другое содержание | 5.1 |
+| [try-on.md](try-on.md) | Смена одежды на человеке с сохранением внешности | 5.2 |
+| [sketch-to-render.md](sketch-to-render.md) | Рисунок от руки → фотореализм | 5.3 |
+| [product-mockup.md](product-mockup.md) | Вырезание товара и удаление фона, точная подмена предмета в интерьере | 5.4, 6.1 |
+| [scene-transform.md](scene-transform.md) | Смена погоды и времени суток, удаление объектов | 5.6, 5.7 |
+| [scene-composite.md](scene-composite.md) | Вставка человека в новую сцену, композиция из нескольких изображений | 5.8, 5.9 |
 
-## Notes common to all files
+## Общее для всех файлов
 
-1. **These prompt guides are written in English**: prose is in English, and the prompt examples are in English as they are sent to the model (source: Cookbook + retrieved 2026-04-23).
-2. **`input_fidelity=high` may appear in the Cookbook**, but with gpt-image-2 it **cannot be specified (400 error)** due to automatic maximum fidelity. This skill strips it automatically in the main validation of `generate_image.py`, but do not add it explicitly when composing prompts.
-3. **`background: transparent` is unsupported by gpt-image-2**. If you need transparency, (a) switch to `--model gpt-image-1.5`, (b) post-process with rembg, or (c) switch to `ccskill-nanobanana`.
-4. **Cost gotcha**: `1024×1536` (portrait) at `high` is **$0.165**, cheaper than `1024×1024` at `high` ($0.211).
-5. The edit path (specifying `--reference`) is **always a full-canvas redraw** (the mask is guidance only, as the official Cookbook states). If pixel-level preservation is required, use a Pillow-style hybrid of crop → edit → paste back.
+1. **Пояснения переведены на русский, а сами промпты оставлены на английском.** Это дословные примеры из Cookbook (сверено 23 апреля 2026), и модель отрабатывает их предсказуемее. Переводить их не нужно: кириллицу gpt-image-2 рисует хорошо, речь только о служебных указаниях модели.
+2. **В Cookbook встречается `input_fidelity=high`**, но с gpt-image-2 этот параметр **указать нельзя — вернётся 400**, потому что точность и так максимальная автоматически. Скилл отбрасывает его в общей валидации `generate_image.py`, но добавлять его в промпты явно не нужно.
+3. **`background: transparent` gpt-image-2 не поддерживает.** Если нужна прозрачность: (а) перейти на `--model gpt-image-1.5`, (б) обработать результат через rembg, (в) взять `ccskill-nanobanana`.
+4. **Ловушка стоимости:** вертикальный `1024×1536` на `high` стоит **0,165 $** — дешевле, чем `1024×1024` на `high` (0,211 $).
+5. Путь редактирования, то есть указание `--reference`, **всегда перерисовывает весь холст**: маска, как прямо сказано в Cookbook, служит лишь ориентиром. Если нужна попиксельная сохранность, применяйте гибрид «вырезать → отредактировать → вклеить обратно» через Pillow.
 
-## Source
+## Источник
 
-All prompt examples are quoted from the OpenAI Cookbook "GPT Image Generation Models Prompting Guide." The source URL is noted directly below the relevant prompt in each file.
+Все примеры промптов взяты из руководства OpenAI Cookbook «GPT Image Generation Models Prompting Guide». Ссылка на источник указана в каждом файле непосредственно под соответствующим промптом.
+
+> **Состояние перевода.** Этот указатель переведён. Четырнадцать файлов с самими схемами промптов пока остаются на английском — их содержимое это в основном дословные промпты из Cookbook, которые в любом случае не переводятся.
