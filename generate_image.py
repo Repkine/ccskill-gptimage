@@ -16,6 +16,7 @@ import argparse
 import base64
 import contextlib
 import json
+import math
 import os
 import re
 import shutil
@@ -78,6 +79,16 @@ CODEX_AUTH_FILE = CODEX_HOME / "auth.json"
 CODEX_GENERATED_DIR = CODEX_HOME / "generated_images"
 CODEX_SESSIONS_DIR = CODEX_HOME / "sessions"
 CODEX_SUBPROCESS_TIMEOUT = 300
+
+# Пропорция на бэкенде codex: у встроенного инструмента image_gen нет параметра
+# размера (схема — только prompt / num_last_images_to_include /
+# referenced_image_paths), поэтому запрошенный --size доезжает до модели просто
+# текстом и соблюдается не всегда. Замер 7 августа 2026: из 19 генераций 17 дали
+# ровно 3:4, две ушли в 1,563. Площадь при этом постоянна (~1,57 Мпикс) —
+# сервер держит бюджет пикселей и выбирает пропорцию из своего набора.
+# Отсюда стратегия: проверить пропорцию по факту и перегенерировать при промахе.
+CODEX_ASPECT_TOLERANCE = 0.01  # относительное отклонение H/W, при котором кадр считается верным
+DEFAULT_ASPECT_RETRIES = 2
 
 
 def validate_size(size: str) -> tuple[int, int]:
@@ -249,6 +260,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             " каждый запуск. Работает только при backend=codex"
         ),
     )
+    parser.add_argument(
+        "--aspect-retries",
+        dest="aspect_retries",
+        type=int,
+        default=DEFAULT_ASPECT_RETRIES,
+        help=(
+            f"сколько раз перегенерировать при промахе по пропорции (по умолчанию:"
+            f" {DEFAULT_ASPECT_RETRIES}). У встроенного инструмента image_gen нет параметра"
+            " размера, поэтому --size доезжает до модели текстом и соблюдается не всегда."
+            " Скрипт сверяет пропорцию готового кадра с запрошенной и при расхождении"
+            f" больше {CODEX_ASPECT_TOLERANCE:.0%} генерирует заново. 0 отключает проверку."
+            " Только для backend=codex и при --size, отличном от auto"
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -418,6 +443,7 @@ def _build_codex_prompt(
     background: str,
     reference_count: int,
     resume: bool = False,
+    aspect_hint: str | None = None,
 ) -> str:
     """Собирает инструкцию для агента Codex.
 
@@ -450,6 +476,8 @@ def _build_codex_prompt(
             " обработку рамки. Но композицию, объект и текст не копируй —"
             " нарисуй заново по промпту ниже."
         )
+    if aspect_hint:
+        lines.append(aspect_hint)
     lines.append("")
     lines.append("Промпт:")
     lines.append(prompt)
@@ -466,6 +494,7 @@ def _generate_via_codex(
     output_path: Path,
     reference_images: list[str] | None,
     resume_session_id: str | None = None,
+    aspect_hint: str | None = None,
 ) -> tuple[Path, str | None, str | None] | None:
     """Генерирует картинку через Codex CLI.
 
@@ -481,6 +510,7 @@ def _generate_via_codex(
         background=background,
         reference_count=len(reference_images or []),
         resume=bool(resume_session_id),
+        aspect_hint=aspect_hint,
     )
     # Windows: npm ставит шим codex.CMD, а CreateProcess не подставляет
     # расширения из PATHEXT — голое "codex" даёт FileNotFoundError.
@@ -573,6 +603,60 @@ def _generate_via_codex(
 
     print("[Error] изображение, сгенерированное через Codex, не найдено")
     return None
+
+
+def _png_dimensions(path: Path) -> tuple[int, int] | None:
+    """Читает ширину и высоту из заголовка IHDR у PNG.
+
+    Своя реализация вместо Pillow: в зависимостях проекта только openai и dotenv,
+    тянуть ради двух чисел целую библиотеку не нужно. Не-PNG и битые файлы дают
+    None — вызывающая сторона тогда просто пропускает проверку пропорции.
+    """
+    try:
+        head = path.read_bytes()[:24]
+    except OSError:
+        return None
+    if len(head) < 24 or head[:8] != b"\x89PNG\r\n\x1a\n" or head[12:16] != b"IHDR":
+        return None
+    width = int.from_bytes(head[16:20], "big")
+    height = int.from_bytes(head[20:24], "big")
+    if width <= 0 or height <= 0:
+        return None
+    return width, height
+
+
+def _aspect_matches(path: Path, size: str) -> tuple[bool, str | None]:
+    """Проверяет, попала ли готовая картинка в пропорцию запрошенного --size.
+
+    Возвращает (совпало, "WxH" по факту). Если размер прочитать не удалось или
+    --size задан как auto, считаем, что придираться не к чему.
+    """
+    if size == "auto":
+        return True, None
+    try:
+        want_w, want_h = validate_size(size)
+    except ValueError:
+        return True, None
+    dims = _png_dimensions(path)
+    if dims is None:
+        return True, None
+    got_w, got_h = dims
+    want_ratio = want_h / want_w
+    got_ratio = got_h / got_w
+    ok = abs(got_ratio - want_ratio) / want_ratio <= CODEX_ASPECT_TOLERANCE
+    return ok, f"{got_w}x{got_h}"
+
+
+def _aspect_retry_hint(size: str, got: str | None) -> str:
+    """Подсказка агенту на повторной попытке: чем именно не устроил прошлый кадр."""
+    want_w, want_h = validate_size(size)
+    divisor = math.gcd(want_w, want_h)
+    ratio = f"{want_w // divisor}:{want_h // divisor}"
+    return (
+        f"ВАЖНО: предыдущая попытка вернула кадр {got or 'неверной формы'},"
+        f" а нужна пропорция ровно {ratio} (ширина к высоте)."
+        f" Сгенерируй заново именно в этой пропорции — она важнее любых других соображений о кадре."
+    )
 
 
 def _extract_revised_prompt_from_codex_log(stdout: str) -> str | None:
@@ -747,6 +831,7 @@ def generate_image(
     output_name: str | None = None,
     backend: str = DEFAULT_BACKEND,
     codex_resume: str | None = None,
+    aspect_retries: int = DEFAULT_ASPECT_RETRIES,
 ) -> str | None:
     """Генерирует изображение через gpt-image-2 и возвращает путь к файлу (None при неудаче).
 
@@ -789,21 +874,56 @@ def generate_image(
 
     if effective_backend == "codex":
         if size != "auto":
-            print(
-                "[Warning] backend Codex не гарантирует размер: генерация идёт через агента"
-                " и недетерминирована. Если нужен точный --size, используйте --backend api"
-            )
+            if aspect_retries > 0:
+                print(
+                    "[Warning] backend Codex не соблюдает размер в пикселях: у встроенного"
+                    " инструмента нет такого параметра. Пропорция будет проверена по факту"
+                    f" (до {aspect_retries} повтор(а/ов)). Если нужен точный размер — --backend api"
+                )
+            else:
+                print(
+                    "[Warning] backend Codex не соблюдает размер в пикселях, а проверка"
+                    " пропорции отключена (--aspect-retries 0). Если нужен точный размер —"
+                    " --backend api"
+                )
         output_path = get_output_path(output_dir, output_format, name=output_name)
-        codex_result = _generate_via_codex(
-            prompt,
-            size=size,
-            quality=quality,
-            output_format=output_format,
-            background=background,
-            output_path=output_path,
-            reference_images=reference_images,
-            resume_session_id=codex_resume,
-        )
+        # Пропорцию бэкенд соблюдает не всегда, поэтому проверяем её по факту и
+        # при промахе генерируем заново, подсказав агенту, что вышло в прошлый раз.
+        # Пиксель-в-пиксель это не даёт (площадь задаёт сервер), но пропорцию —
+        # даёт, а дальше остаётся честное уменьшение без добивки краёв.
+        attempts = max(0, aspect_retries) + 1
+        codex_result = None
+        aspect_hint = None
+        for attempt in range(1, attempts + 1):
+            codex_result = _generate_via_codex(
+                prompt,
+                size=size,
+                quality=quality,
+                output_format=output_format,
+                background=background,
+                output_path=output_path,
+                reference_images=reference_images,
+                resume_session_id=codex_resume,
+                aspect_hint=aspect_hint,
+            )
+            if codex_result is None:
+                break
+            ok, got = _aspect_matches(codex_result[0], size)
+            if ok:
+                if attempt > 1:
+                    print(f"[Info] пропорция получена с попытки {attempt}: {got}")
+                break
+            if attempt < attempts:
+                print(
+                    f"[Warning] попытка {attempt}: кадр {got} не в пропорции {size},"
+                    " генерирую заново"
+                )
+                aspect_hint = _aspect_retry_hint(size, got)
+            else:
+                print(
+                    f"[Warning] за {attempts} попыт(ку/ки) пропорция {size} не получена,"
+                    f" оставляю последний кадр {got} — при сборке понадобится добивка (-Pad)"
+                )
         if codex_result is not None:
             saved_path, revised, session_id = codex_result
             if revised:
@@ -994,6 +1114,7 @@ def main():
             output_name=args.output_name,
             backend=args.backend,
             codex_resume=args.codex_resume,
+            aspect_retries=args.aspect_retries,
         )
         if result is None:
             sys.exit(1)

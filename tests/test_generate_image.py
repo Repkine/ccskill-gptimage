@@ -799,6 +799,140 @@ class TestCodexResume:
         assert meta["codex_session_id"] == sid
 
 
+class TestCodexAspectRetry:
+    """Пропорция на бэкенде codex: у встроенного image_gen нет параметра размера,
+    поэтому кадр сверяется по факту и при промахе генерируется заново."""
+
+    @staticmethod
+    def _png(w: int, h: int) -> bytes:
+        """Собирает PNG-заголовок с заданными размерами.
+
+        Полноценный PNG не нужен: код читает только IHDR, а тесты не открывают файл
+        как изображение.
+        """
+        return (
+            b"\x89PNG\r\n\x1a\n"
+            + (13).to_bytes(4, "big")
+            + b"IHDR"
+            + w.to_bytes(4, "big")
+            + h.to_bytes(4, "big")
+            + b"\x08\x06\x00\x00\x00"
+        )
+
+    def _setup(self, monkeypatch, tmp_path, *sizes):
+        """Подсовывает последовательность кадров: по одному на каждую попытку.
+        Последний повторяется, если попыток окажется больше."""
+        made = []
+
+        def _fake(since):
+            w, h = sizes[min(len(made), len(sizes) - 1)]
+            p = tmp_path / f"ig_{len(made)}.png"
+            p.write_bytes(self._png(w, h))
+            made.append(p)
+            return p
+
+        monkeypatch.setattr("generate_image._find_latest_codex_image", _fake)
+        return made
+
+    def test_png_dimensions_reads_header(self, tmp_path):
+        from generate_image import _png_dimensions
+
+        p = tmp_path / "x.png"
+        p.write_bytes(self._png(1086, 1448))
+        assert _png_dimensions(p) == (1086, 1448)
+
+    def test_png_dimensions_returns_none_for_non_png(self, tmp_path):
+        from generate_image import _png_dimensions
+
+        p = tmp_path / "x.png"
+        p.write_bytes(b"not a png at all, just some bytes here")
+        assert _png_dimensions(p) is None
+
+    @patch("generate_image.subprocess.run")
+    def test_correct_aspect_generates_once(self, mock_run, monkeypatch, tmp_path):
+        """1086x1448 — это ровно 3:4, как и запрошенные 1200x1600. Повтора быть не должно."""
+        self._setup(monkeypatch, tmp_path, (1086, 1448))
+        mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
+        result = generate_image(
+            prompt="x", backend="codex", size="1200x1600",
+            output_dir=str(tmp_path / "out"), output_name="a",
+        )
+        assert result is not None
+        assert mock_run.call_count == 1
+
+    @patch("generate_image.subprocess.run")
+    def test_wrong_aspect_retries_until_correct(self, mock_run, monkeypatch, tmp_path):
+        """Первый кадр 1003x1568 (мимо), второй 1086x1448 (в цель) — двух вызовов достаточно."""
+        self._setup(monkeypatch, tmp_path, (1003, 1568), (1086, 1448))
+        mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
+        result = generate_image(
+            prompt="x", backend="codex", size="1200x1600",
+            output_dir=str(tmp_path / "out"), output_name="a",
+        )
+        assert result is not None
+        assert mock_run.call_count == 2
+
+    @patch("generate_image.subprocess.run")
+    def test_retry_hint_reaches_agent_on_second_attempt(
+        self, mock_run, monkeypatch, tmp_path
+    ):
+        """Во второй попытке агенту сообщается, что вышло в прошлый раз и что нужно."""
+        self._setup(monkeypatch, tmp_path, (1003, 1568), (1086, 1448))
+        mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
+        generate_image(
+            prompt="x", backend="codex", size="1200x1600",
+            output_dir=str(tmp_path / "out"), output_name="a",
+        )
+        first = mock_run.call_args_list[0].kwargs["input"]
+        second = mock_run.call_args_list[1].kwargs["input"]
+        assert "1003x1568" not in first
+        assert "1003x1568" in second
+        assert "3:4" in second
+
+    @patch("generate_image.subprocess.run")
+    def test_retries_are_bounded_and_last_frame_kept(
+        self, mock_run, monkeypatch, tmp_path, capsys
+    ):
+        """Если пропорция так и не пришла, картинку не выбрасываем — её ещё можно добить."""
+        self._setup(monkeypatch, tmp_path, (1003, 1568))
+        mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
+        result = generate_image(
+            prompt="x", backend="codex", size="1200x1600", aspect_retries=2,
+            output_dir=str(tmp_path / "out"), output_name="a",
+        )
+        assert result is not None
+        assert Path(result).exists()
+        assert mock_run.call_count == 3  # первая попытка плюс два повтора
+        assert "-Pad" in capsys.readouterr().out
+
+    @patch("generate_image.subprocess.run")
+    def test_zero_retries_disables_check(self, mock_run, monkeypatch, tmp_path):
+        self._setup(monkeypatch, tmp_path, (1003, 1568))
+        mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
+        generate_image(
+            prompt="x", backend="codex", size="1200x1600", aspect_retries=0,
+            output_dir=str(tmp_path / "out"), output_name="a",
+        )
+        assert mock_run.call_count == 1
+
+    @patch("generate_image.subprocess.run")
+    def test_size_auto_never_retries(self, mock_run, monkeypatch, tmp_path):
+        """При --size auto придираться не к чему: пропорцию никто не заказывал."""
+        self._setup(monkeypatch, tmp_path, (1003, 1568))
+        mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
+        generate_image(
+            prompt="x", backend="codex", size="auto",
+            output_dir=str(tmp_path / "out"), output_name="a",
+        )
+        assert mock_run.call_count == 1
+
+    def test_cli_default_and_override(self):
+        from generate_image import DEFAULT_ASPECT_RETRIES
+
+        assert parse_args(["p"]).aspect_retries == DEFAULT_ASPECT_RETRIES
+        assert parse_args(["p", "--aspect-retries", "0"]).aspect_retries == 0
+
+
 class TestCodexSessionLogRecovery:
     """Поддержка нового Codex: codex exec не создаёт файл, а возвращает картинку
     inline-base64 в логе сессии. Если файла нет, b64 забирается из лога, декодируется
@@ -1131,7 +1265,8 @@ class TestSizeValidationIntegration:
             prompt="x", size="3840x2160", backend="codex", output_dir=str(tmp_path / "out")
         )
         out = capsys.readouterr().out
-        assert "Codex" in out and ("не гарантирует" in out or "warn" in out.lower())
+        assert "[Warning]" in out
+        assert "Codex" in out and "не соблюдает размер" in out
 
 
 # ---------------------------------------------------------------------------
