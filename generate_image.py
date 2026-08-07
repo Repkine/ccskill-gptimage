@@ -255,7 +255,7 @@ def _codex_subscription_available() -> bool:
     if not CODEX_AUTH_FILE.exists():
         return False
     try:
-        data = json.loads(CODEX_AUTH_FILE.read_text())
+        data = json.loads(CODEX_AUTH_FILE.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return False
     tokens = data.get("tokens") or {}
@@ -287,7 +287,9 @@ def _find_latest_codex_image(since_mtime: float) -> Path | None:
         return None
     latest_mtime = -1.0
     latest_path: Path | None = None
-    for p in CODEX_GENERATED_DIR.rglob("ig_*.png"):
+    # codex-cli 0.146.x пишет файл как `exec-<call-id>.png`, а не `ig_*.png`,
+    # поэтому маска расширена до любых PNG в каталоге сессий
+    for p in CODEX_GENERATED_DIR.rglob("*.png"):
         try:
             m = p.stat().st_mtime
         except OSError:
@@ -339,7 +341,9 @@ def _recover_codex_image_from_session(log_path: Path) -> bytes | None:
     採用する(partial_images 対策)。`data:` URI 形式にも一応対応する。
     """
     try:
-        text = log_path.read_text()
+        # Windows читает в локальной кодовой странице и падает на первом же
+        # не-ASCII байте лога; errors="replace" страхует от битых хвостов
+        text = log_path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None
     last_b64: str | None = None
@@ -434,12 +438,20 @@ def _generate_via_codex(
         reference_count=len(reference_images or []),
     )
     cmd: list[str] = [
-        "codex",
+        # Windows: npm ставит шим codex.CMD, а CreateProcess не подставляет
+        # расширения из PATHEXT — голое "codex" даёт FileNotFoundError.
+        # shutil.which находит .CMD корректно, поэтому резолвим путь заранее.
+        shutil.which("codex") or "codex",
         "exec",
         "--skip-git-repo-check",
         "--sandbox",
         "workspace-write",
-        codex_prompt,
+        # Windows: многострочный промпт, переданный позиционным аргументом,
+        # обрезается на первом переносе строки — вызов идёт через batch-шим
+        # codex.CMD, а cmd.exe трактует перенос как конец команды. В логе сессии
+        # это видно как user_message из одной первой строки. `-` переключает
+        # codex exec на чтение промпта из stdin, где переносы безопасны.
+        "-",
     ]
     # `-i` は variadic なので必ず prompt の後に置く(逆だと prompt まで画像として食われる)
     for ref in reference_images or []:
@@ -449,8 +461,12 @@ def _generate_via_codex(
     try:
         proc = subprocess.run(
             cmd,
+            input=codex_prompt,
             capture_output=True,
             text=True,
+            # без явной кодировки Windows возьмёт локальную кодовую страницу
+            # и покалечит кириллицу в промпте
+            encoding="utf-8",
             timeout=CODEX_SUBPROCESS_TIMEOUT,
         )
     except subprocess.TimeoutExpired:
@@ -557,7 +573,13 @@ def _call_image_edits(client: OpenAI, **kwargs):
 
 def _save_metadata(image_path: Path, meta: dict) -> Path:
     meta_path = image_path.with_suffix(image_path.suffix + ".json")
-    meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2))
+    # ensure_ascii=False なのに明示エンコーディングが無いと、Windows はローカル
+    # コードページ(ru-RU なら cp1251)で書き出す。ロシア語プロンプトのサイドカーは
+    # UTF-8 として読めなくなるため、ギャラリー側の書き出しと同じく utf-8 を明示する
+    meta_path.write_text(
+        json.dumps(meta, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     return meta_path
 
 
