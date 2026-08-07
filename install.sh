@@ -2,19 +2,19 @@
 #
 # ccskill-gptimage - Installer (issue #020)
 #
-# clone → cd → ./install.sh だけで、どのプロジェクトからでも
-# 人間にも AI (Claude Code) にも使える状態にする。
+# После clone → cd → ./install.sh инструмент доступен из любого проекта
+# и человеку, и Claude Code.
 #
-#   1. python3 (>= 3.10) チェック
-#   2. venv 構築 + 依存インストール(冪等)
-#   3. ~/.local/bin/ccskill-gptimage symlink 配備(PATH コマンド化)
-#   4. ~/.claude/skills/ccskill-gptimage symlink 登録(ユーザレベルスキル)
-#   5. backend(Codex CLI / OPENAI_API_KEY)利用可否の診断表示
+#   1. проверка python3 (>= 3.10)
+#   2. создание venv и установка зависимостей (идемпотентно)
+#   3. symlink ~/.local/bin/ccskill-gptimage — команда появляется в PATH
+#   4. symlink ~/.claude/skills/ccskill-gptimage — регистрация скилла на уровне пользователя
+#   5. диагностика доступности backend (Codex CLI / OPENAI_API_KEY)
 #
 # Usage: ./install.sh
 #
-# 環境変数:
-#   CCSKILL_GPTIMAGE_INSTALL_SKIP_DEPS=1  pip install をスキップ(テスト用)
+# Переменные окружения:
+#   CCSKILL_GPTIMAGE_INSTALL_SKIP_DEPS=1  пропустить pip install (для тестов)
 #
 
 set -e
@@ -25,7 +25,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# 自身の位置から repo ディレクトリを解決(symlink 経由でも辿る)
+# Вычисляем каталог репозитория от собственного расположения (в том числе через symlink)
 SCRIPT_PATH="$0"
 while [ -L "$SCRIPT_PATH" ]; do
     LINK_TARGET=$(readlink "$SCRIPT_PATH")
@@ -44,13 +44,13 @@ echo "Master: $REPO_DIR"
 echo ""
 
 # ========================================
-# 1. python3 チェック (>= 3.10)
+# 1. Проверка python3 (>= 3.10)
 # ========================================
 
 echo "Step 1: Checking prerequisites..."
 
-# 3.10+ の Python を探索(macOS のシステム python3 は 3.9 のため、
-# バージョン付きコマンドを優先して探す)
+# Ищем Python 3.10+. В macOS системный python3 — это 3.9, поэтому сначала
+# пробуем команды с номером версии в имени.
 _py_ok() {
     "$1" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null
 }
@@ -59,7 +59,7 @@ VENV_PYTHON="$REPO_DIR/venv/bin/python"
 
 PYTHON_BIN=""
 if [ -x "$VENV_PYTHON" ] && _py_ok "$VENV_PYTHON"; then
-    # 既存 venv が有効ならそれを使う(システム Python は不問)
+    # Если существующий venv рабочий, берём его — версия системного Python не важна
     PYTHON_BIN="$VENV_PYTHON"
 else
     for cand in python3.13 python3.12 python3.11 python3.10 python3; do
@@ -80,7 +80,7 @@ echo -e "${GREEN}✓ Python found: $PYTHON_BIN ($("$PYTHON_BIN" -c 'import sys; 
 echo ""
 
 # ========================================
-# 2. venv 構築 + 依存インストール(冪等)
+# 2. Создание venv и установка зависимостей (идемпотентно)
 # ========================================
 
 echo "Step 2: Setting up Python environment..."
@@ -101,7 +101,7 @@ fi
 echo ""
 
 # ========================================
-# 3. ~/.local/bin への symlink 配備
+# 3. Установка symlink в ~/.local/bin
 # ========================================
 
 echo "Step 3: Installing 'ccskill-gptimage' command..."
@@ -121,7 +121,7 @@ else
     exit 1
 fi
 
-# PATH チェック
+# Проверка PATH
 if echo "$PATH" | tr ':' '\n' | grep -qx "$BIN_DIR"; then
     echo -e "${GREEN}✓ $BIN_DIR is in PATH${NC}"
 else
@@ -140,7 +140,7 @@ fi
 echo ""
 
 # ========================================
-# 4. ユーザレベルスキル登録 (~/.claude/skills)
+# 4. Регистрация скилла на уровне пользователя (~/.claude/skills)
 # ========================================
 
 echo "Step 4: Registering user-level skill for Claude Code..."
@@ -160,7 +160,7 @@ if [ -L "$SKILL_LINK" ]; then
     /bin/rm -f "$SKILL_LINK"
 elif [ -d "$SKILL_LINK" ]; then
     if [ -f "$SKILL_LINK/SKILL.md" ]; then
-        # 過去の手動コピーとみなして symlink に置換
+        # Считаем это следом ручного копирования и заменяем на symlink
         /bin/rm -rf "$SKILL_LINK"
     else
         echo -e "${RED}Error: $SKILL_LINK exists but does not look like ccskill-gptimage (no SKILL.md).${NC}"
@@ -187,18 +187,19 @@ echo "  (available in every Claude Code project; auto-updates via git pull)"
 echo ""
 
 # ========================================
-# 5. backend 利用可否の診断(presence ベース。秘密ファイルの中身は読まない: issue #021)
+# 5. Диагностика доступности backend — только по факту наличия.
+#    Содержимое секретных файлов не читается (issue #021)
 # ========================================
 
 echo "Step 5: Checking image-generation backends (presence-based; secrets not read)..."
 
-# Codex: CLI の存在 + ログインセッションファイルの存在のみで判定(token は読まない)
+# Codex: решение по наличию CLI и файла сессии входа. Сам токен не читается
 CODEX_OK=false
 if command -v codex &> /dev/null && [ -f "$HOME/.codex/auth.json" ]; then
     CODEX_OK=true
 fi
 
-# API: 環境変数の有無 + .env ファイルの存在のみで判定(.env の中身は読まない)
+# API: решение по наличию переменной окружения и файла .env. Содержимое .env не читается
 API_OK=false
 if [ -n "${OPENAI_API_KEY:-}" ]; then
     API_OK=true
@@ -226,7 +227,7 @@ fi
 echo ""
 
 # ========================================
-# 完了
+# Готово
 # ========================================
 
 echo "================================================"

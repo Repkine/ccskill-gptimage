@@ -4,8 +4,8 @@
 #
 # Usage: ccskill-gptimage <command> [args...]
 #
-# 自己位置解決ディスパッチャ。~/.local/bin からの symlink で呼ばれても
-# readlink で実体位置を辿り、CCSKILL_GPTIMAGE_DIR を解決する。
+# Диспетчер, определяющий собственное расположение. Даже при вызове через symlink
+# из ~/.local/bin он идёт по readlink до настоящего файла и вычисляет CCSKILL_GPTIMAGE_DIR.
 #
 
 set -e
@@ -71,9 +71,9 @@ cmd_generate() {
     exec "$PYTHON" "$CCSKILL_GPTIMAGE_DIR/generate_image.py" "$@"
 }
 
-# browse: 閲覧UIは自前実装せず ccskill-gallery へ委譲する(issue #024)。
-# 生成物のストア書き込みは generate_image.py が既に store-spec 準拠で行っている。
-# 未導入時はエラーにせず(exit 0)案内のみ表示する。
+# browse: собственного интерфейса просмотра нет, работа передаётся ccskill-gallery
+# (issue #024). Запись результатов в галерею уже делает generate_image.py по store-spec.
+# Если ccskill-gallery не установлен, ошибки нет: печатается подсказка и exit 0.
 cmd_browse() {
     if command -v ccskill-gallery > /dev/null 2>&1; then
         exec ccskill-gallery browse "$@"
@@ -88,9 +88,10 @@ cmd_browse() {
     exit 0
 }
 
-# doctor: 環境と backend を診断する。
-# 重要: 秘密ファイル(.env / ~/.codex/auth.json)の中身は一切読まない。
-# env 変数の有無とファイルの存在のみで判定し、キー値は絶対に出力しない(issue #021)。
+# doctor: диагностика окружения и backend.
+# Важно: содержимое секретных файлов (.env, ~/.codex/auth.json) не читается вообще.
+# Решение принимается по наличию переменных окружения и существованию файлов,
+# значения ключей не печатаются никогда (issue #021).
 cmd_doctor() {
     local ok="${GREEN}✓${NC}" ng="${RED}✗${NC}" warn="${YELLOW}⚠${NC}"
     local hard_fail=0

@@ -1,7 +1,8 @@
-"""ccskill-gptimage browse サブコマンドのテスト (issue #024)
+"""Тесты подкоманды browse (issue #024)
 
-browse は自前の閲覧UIを実装せず、ccskill-gallery へ委譲する。
-ccskill-gallery が未導入の環境ではエラーにせず(exit 0)案内を表示する。
+browse не реализует собственный интерфейс просмотра, а передаёт работу
+ccskill-gallery. Если ccskill-gallery не установлен, команда не падает:
+выводит подсказку и завершается с exit 0.
 """
 
 import os
@@ -11,7 +12,7 @@ from pathlib import Path
 REPO_DIR = Path(__file__).parent.parent
 DISPATCHER = REPO_DIR / "ccskill-gptimage"
 
-# ccskill-gallery を含まない最小 PATH(coreutils は要る)
+# Минимальный PATH без ccskill-gallery (coreutils нужны)
 MINIMAL_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 
 
@@ -34,7 +35,7 @@ def _run_browse(env: dict, *args: str) -> subprocess.CompletedProcess:
 
 
 def _make_fake_ccskill_gallery(tmp_path: Path) -> Path:
-    """PATH 上に置く偽 ccskill-gallery。渡された引数をそのまま出力して終了する"""
+    """Поддельный ccskill-gallery для PATH: печатает полученные аргументы и завершается"""
     bin_dir = tmp_path / "fakebin"
     bin_dir.mkdir()
     fake = bin_dir / "ccskill-gallery"

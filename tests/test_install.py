@@ -1,9 +1,9 @@
-"""install.sh とディスパッチャ ccskill-gptimage のテスト (issue #020)
+"""Тесты install.sh и диспетчера ccskill-gptimage (issue #020)
 
-HOME を一時ディレクトリに差し替えて実行するため、実環境の
-~/.local/bin / ~/.claude/skills には触れない。
-pip install は CCSKILL_GPTIMAGE_INSTALL_SKIP_DEPS=1 でスキップする
-(venv はリポジトリに構築済みのものをディスパッチャが使う)。
+HOME подменяется на временный каталог, поэтому реальные ~/.local/bin
+и ~/.claude/skills не затрагиваются.
+pip install пропускается через CCSKILL_GPTIMAGE_INSTALL_SKIP_DEPS=1 —
+диспетчер использует venv, уже собранный в репозитории.
 """
 
 import os
@@ -36,7 +36,7 @@ def _run_install(home: Path, *args: str) -> subprocess.CompletedProcess:
 
 
 def _run_dispatcher(home: Path, *args: str, cwd: Path | None = None) -> subprocess.CompletedProcess:
-    """インストール済み symlink 経由でディスパッチャを実行する"""
+    """Запускает диспетчер через установленный symlink"""
     link = home / ".local/bin/ccskill-gptimage"
     return subprocess.run(
         [str(link), *args],
@@ -50,7 +50,7 @@ def _run_dispatcher(home: Path, *args: str, cwd: Path | None = None) -> subproce
 
 @pytest.fixture
 def installed_home(tmp_path: Path) -> Path:
-    """install.sh 実行済みの一時 HOME"""
+    """Временный HOME с уже выполненным install.sh"""
     proc = _run_install(tmp_path)
     assert proc.returncode == 0, f"install.sh failed:\n{proc.stdout}\n{proc.stderr}"
     return tmp_path
@@ -69,7 +69,7 @@ class TestInstallScript:
     def test_creates_user_skill_symlink(self, installed_home):
         link = installed_home / ".claude/skills/ccskill-gptimage"
         assert link.is_symlink()
-        # symlink 経由で SKILL.md が解決できる(= Claude Code が認識できる)
+        # SKILL.md разрешается через symlink, то есть Claude Code его увидит
         assert (link / "SKILL.md").is_file()
         assert link.resolve() == (REPO_DIR / ".claude/skills/ccskill-gptimage").resolve()
 
@@ -80,7 +80,7 @@ class TestInstallScript:
         assert (installed_home / ".claude/skills/ccskill-gptimage").is_symlink()
 
     def test_refuses_foreign_skill_dir(self, tmp_path):
-        """SKILL.md を持たない実体ディレクトリが既にある場合は壊さずエラー"""
+        """Если на месте уже лежит обычный каталог без SKILL.md — ошибка, ничего не ломаем"""
         foreign = tmp_path / ".claude/skills/ccskill-gptimage"
         foreign.mkdir(parents=True)
         (foreign / "keep.txt").write_text("do not delete")
@@ -89,7 +89,7 @@ class TestInstallScript:
         assert (foreign / "keep.txt").exists()
 
     def test_replaces_stale_skill_copy(self, tmp_path):
-        """SKILL.md を持つ実体ディレクトリ(過去の手動コピー)は symlink に置換する"""
+        """Обычный каталог с SKILL.md (след ручного копирования) заменяется на symlink"""
         stale = tmp_path / ".claude/skills/ccskill-gptimage"
         stale.mkdir(parents=True)
         (stale / "SKILL.md").write_text("# old copy")
@@ -121,8 +121,8 @@ class TestDispatcher:
         assert proc.returncode != 0
 
     def test_generate_wires_to_python_validation(self, installed_home, tmp_path):
-        """別ディレクトリから generate がスクリプト本体まで届くこと。
-        不正サイズは API 呼び出し前に exit 2 + 日本語エラーで返る(課金なし)"""
+        """generate добирается до самого скрипта из другого каталога.
+        Неверный размер отсекается до вызова API: exit 2 и текст ошибки, без списаний"""
         workdir = tmp_path / "elsewhere"
         workdir.mkdir(parents=True, exist_ok=True)
         proc = _run_dispatcher(

@@ -1,4 +1,4 @@
-"""ccskill-gptimage 画像生成スクリプトのテスト"""
+"""Тесты скрипта генерации изображений ccskill-gptimage"""
 
 import base64
 import json
@@ -37,14 +37,14 @@ from generate_image import (
 )
 
 
-# 1x1 透過 PNG の base64(モック用)
+# base64 прозрачного PNG 1x1 — заглушка для моков
 DUMMY_PNG_B64 = (
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgAAIAAAUAAeImBZsAAAAASUVORK5CYII="
 )
 
 
 def _make_image_response(b64: str = DUMMY_PNG_B64, revised_prompt: str | None = None) -> Mock:
-    """OpenAI Images API の擬似レスポンスを作る"""
+    """Собирает фиктивный ответ OpenAI Images API"""
     datum = Mock()
     datum.b64_json = b64
     datum.revised_prompt = revised_prompt
@@ -55,8 +55,9 @@ def _make_image_response(b64: str = DUMMY_PNG_B64, revised_prompt: str | None = 
 
 @pytest.fixture(autouse=True)
 def _force_api_backend(request, monkeypatch):
-    """既存テストは Codex を使わない前提に固定する。
-    backend 検出ロジックそのものをテストする場合は @pytest.mark.no_force_api_backend で opt-out。"""
+    """Фиксирует существующие тесты на работу без Codex.
+    Если тестируется сама логика выбора backend, отключается меткой
+    @pytest.mark.no_force_api_backend."""
     if request.node.get_closest_marker("no_force_api_backend"):
         return
     monkeypatch.setattr("generate_image._codex_subscription_available", lambda: False)
@@ -64,7 +65,7 @@ def _force_api_backend(request, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _isolate_gallery(tmp_path, monkeypatch):
-    """テストが実ユーザのギャラリーストア(~/.ccskill-gptimage/gallery)に触れないよう隔離する"""
+    """Изолирует тесты от реальной галереи пользователя (~/.ccskill-gptimage/gallery)"""
     monkeypatch.setenv(GALLERY_DIR_ENV, str(tmp_path / "gallery"))
 
 
@@ -213,9 +214,9 @@ class TestGenerateImageBasic:
             assert kwargs["prompt"] == "a fox logo"
             assert kwargs["size"] == "1024x1024"
             assert kwargs["quality"] == "high"
-            # opaque/auto の場合は background パラメータは送らない
+            # При opaque/auto параметр background не отправляется
             assert "background" not in kwargs or kwargs["background"] != "transparent"
-            # ファイルが実際に書き出されている
+            # Файл действительно записан на диск
             assert Path(result).exists()
             assert Path(result).stat().st_size > 0
 
@@ -333,7 +334,7 @@ class TestGenerateImageWithReference:
         assert kwargs["model"] == DEFAULT_MODEL
         assert kwargs["prompt"] == "change background to sunset"
         assert kwargs["input_fidelity"] == "high"
-        # image は file-like のリスト or 単体
+        # image — это либо список file-like объектов, либо один объект
         assert "image" in kwargs
 
     @patch("generate_image.OpenAI")
@@ -355,7 +356,7 @@ class TestGenerateImageWithReference:
             )
 
         kwargs = client.images.edit.call_args.kwargs
-        # 複数枚はリストで渡す
+        # Несколько изображений передаются списком
         assert isinstance(kwargs["image"], list)
         assert len(kwargs["image"]) == 3
 
@@ -397,7 +398,7 @@ class TestGenerateImageWithReference:
             )
         captured = capsys.readouterr()
         assert "[Error]" in captured.out
-        assert "参照画像が見つかりません" in captured.out
+        assert "референсное изображение не найдено" in captured.out
 
 
 class TestRevisedPromptAndMetadata:
@@ -542,8 +543,8 @@ class TestBackendChoices:
 
 @pytest.mark.no_force_api_backend
 class TestCodexSubscriptionAvailable:
-    """`_codex_subscription_available()` 自身の挙動。
-    autouse fixture を opt-out して実関数を呼ぶ。"""
+    """Поведение самой `_codex_subscription_available()`.
+    Autouse-фикстура отключена, вызывается настоящая функция."""
 
     def test_returns_false_when_codex_not_in_path(self, monkeypatch):
         monkeypatch.setattr("generate_image.shutil.which", lambda name: None)
@@ -600,21 +601,21 @@ class TestResolveBackend:
         assert _resolve_backend("auto") == "api"
 
     def test_auto_without_codex_without_api_key_returns_api(self, monkeypatch):
-        """codex も key も無い場合でも api を返し、後段の OpenAI() で native エラーに任せる"""
+        """Без codex и без ключа всё равно возвращаем api — ошибку выдаст сам OpenAI()"""
         monkeypatch.setattr("generate_image._codex_subscription_available", lambda: False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         assert _resolve_backend("auto") == "api"
 
 
 class TestGenerateViaCodex:
-    """Codex backend 経由の生成ロジック。subprocess と画像探索をモックする"""
+    """Логика генерации через backend codex. subprocess и поиск картинки замоканы"""
 
     @patch("generate_image.subprocess.run")
     def test_codex_subprocess_args_have_prompt_before_image(
         self, mock_run, monkeypatch, tmp_path
     ):
-        """`-i` は variadic で後続 positional を食う罠を回避するため、prompt は -i より前"""
-        # 生成画像をでっち上げ
+        """`-i` variadic и съедает следующие позиционные аргументы, поэтому промпт идёт раньше него"""
+        # Подсовываем фиктивную сгенерированную картинку
         fake_image = tmp_path / "ig_fake.png"
         fake_image.write_bytes(base64.b64decode(DUMMY_PNG_B64))
         monkeypatch.setattr(
@@ -636,25 +637,23 @@ class TestGenerateViaCodex:
         assert result is not None
 
         cmd = mock_run.call_args[0][0]
-        # prompt は positional の 1 つ、`-i` ペアより前にあること
         assert "codex" in cmd[0]
         assert "exec" in cmd
         assert "-i" in cmd
         i_idx = cmd.index("-i")
-        # `-i` の直前は引数フラグ系 (--sandbox の値) or プロンプト文字列。
-        # 重要なのはプロンプト文字列が `-i` より前にあること。
-        # -i の引数 (ref.png 絶対パス) は -i の直後
+        # Аргумент `-i` (абсолютный путь к ref.png) идёт сразу после самого флага
         assert cmd[i_idx + 1] == str(ref)
-        # prompt が -i より前のどこかにある
-        prompt_indices = [k for k, v in enumerate(cmd) if "add a red beret" in v]
-        assert prompt_indices, "prompt not found in command"
-        assert max(prompt_indices) < i_idx
+        # Промпт передаётся через stdin, а его место в argv занимает `-`,
+        # и этот `-` обязан стоять раньше `-i`
+        assert "-" in cmd
+        assert cmd.index("-") < i_idx
+        assert "add a red beret" in mock_run.call_args.kwargs["input"]
 
     @patch("generate_image.subprocess.run")
     def test_codex_includes_image_gen_directive_in_prompt(
         self, mock_run, monkeypatch, tmp_path
     ):
-        """API 経由を防ぐため『image_gen を直接使え』ディレクティブを必ず含める"""
+        """Указание «используй image_gen напрямую» обязано быть в промпте — иначе агент уйдёт в API"""
         fake = tmp_path / "ig_x.png"
         fake.write_bytes(base64.b64decode(DUMMY_PNG_B64))
         monkeypatch.setattr("generate_image._find_latest_codex_image", lambda since: fake)
@@ -665,10 +664,8 @@ class TestGenerateViaCodex:
             backend="codex",
             output_dir=str(tmp_path / "out"),
         )
-        cmd = mock_run.call_args[0][0]
-        # cmd の中に Codex agent 向けプロンプトがあり、そこに image_gen の指示が含まれる
-        joined = " ".join(cmd)
-        assert "image_gen" in joined
+        # Промпт для агента уходит в stdin, поэтому проверяем input, а не argv
+        assert "image_gen" in mock_run.call_args.kwargs["input"]
 
     @patch("generate_image.subprocess.run")
     def test_codex_copies_latest_image_to_output_path(
@@ -717,7 +714,7 @@ class TestGenerateViaCodex:
         self, mock_run, monkeypatch, tmp_path
     ):
         monkeypatch.setattr("generate_image._find_latest_codex_image", lambda since: None)
-        # セッションログ回収フォールバックも空にする(実環境の ~/.codex/sessions を拾わない)
+        # Запасной путь через лог сессии тоже глушим, чтобы не зацепить реальный ~/.codex/sessions
         monkeypatch.setattr(
             "generate_image.CODEX_SESSIONS_DIR", tmp_path / "no_sessions"
         )
@@ -739,7 +736,7 @@ class TestGenerateViaCodex:
 
 
 class TestCodexResume:
-    """`--codex-resume` で `codex exec resume <ID>` に切り替わること(連作のスタイル継承)。"""
+    """`--codex-resume` переключает вызов на `codex exec resume <ID>` — наследование стиля серии."""
 
     def _run_with_resume(self, mock_run, monkeypatch, tmp_path, resume):
         fake = tmp_path / "ig_x.png"
@@ -764,13 +761,13 @@ class TestCodexResume:
         cmd, _ = self._run_with_resume(mock_run, monkeypatch, tmp_path, sid)
         assert cmd[1] == "exec"
         assert cmd[2] == "resume"
-        # SESSION_ID は PROMPT(`-`)より前の positional
+        # SESSION_ID — позиционный аргумент перед промптом (`-`)
         assert cmd.index(sid) < cmd.index("-")
 
     @patch("generate_image.subprocess.run")
     def test_resume_does_not_pass_sandbox_flag(self, mock_run, monkeypatch, tmp_path):
-        """`codex exec resume` に --sandbox は存在しない(codex-cli 0.146.1 で確認)。
-        渡すと unknown argument で落ちるので、絶対に付けないこと。"""
+        """У `codex exec resume` нет флага --sandbox (проверено на codex-cli 0.146.1).
+        При передаче падает с unknown argument, поэтому добавлять его нельзя."""
         cmd, _ = self._run_with_resume(
             mock_run, monkeypatch, tmp_path, "019eeffd-ca63-7d00-b64e-2dacdd420385"
         )
@@ -786,13 +783,13 @@ class TestCodexResume:
     def test_resume_adds_style_continuity_directive_to_prompt(
         self, mock_run, monkeypatch, tmp_path
     ):
-        """スタイルだけ継承し構図は複製させない指示が stdin プロンプトに入ること。"""
+        """В промпт на stdin попадает указание наследовать стиль, но не копировать композицию."""
         self._run_with_resume(
             mock_run, monkeypatch, tmp_path, "019eeffd-ca63-7d00-b64e-2dacdd420385"
         )
         sent = mock_run.call_args.kwargs["input"]
-        assert "同じビジュアルスタイル" in sent
-        assert "構図・被写体・テキストは複製せず" in sent
+        assert "тот же визуальный стиль" in sent
+        assert "композицию, объект и текст не копируй" in sent
 
     @patch("generate_image.subprocess.run")
     def test_session_id_recorded_in_metadata(self, mock_run, monkeypatch, tmp_path):
@@ -803,8 +800,9 @@ class TestCodexResume:
 
 
 class TestCodexSessionLogRecovery:
-    """新しい Codex (codex exec が画像をファイル化せず、セッションログに inline base64 で返す)
-    への対応。ファイルが見つからないとき、ログから b64 を回収してデコード保存できること。"""
+    """Поддержка нового Codex: codex exec не создаёт файл, а возвращает картинку
+    inline-base64 в логе сессии. Если файла нет, b64 забирается из лога, декодируется
+    и сохраняется."""
 
     def test_extract_codex_session_id(self):
         from generate_image import _extract_codex_session_id
@@ -843,7 +841,7 @@ class TestCodexSessionLogRecovery:
             },
         )
         monkeypatch.setattr("generate_image.CODEX_SESSIONS_DIR", sessions)
-        # 旧来のファイル出力経路は見つからない
+        # Старый путь с записью файла ничего не находит
         monkeypatch.setattr("generate_image._find_latest_codex_image", lambda since: None)
         mock_run.return_value = Mock(
             returncode=0, stdout=f"session id: {sid}\n", stderr=""
@@ -892,12 +890,12 @@ class TestCodexSessionLogRecovery:
     def test_file_output_path_takes_precedence_over_log(
         self, mock_run, monkeypatch, tmp_path
     ):
-        """旧 Codex のファイル出力が見つかる場合はそちらを優先(後方互換)。"""
+        """Если файл от старого Codex найден, приоритет у него — обратная совместимость."""
         sid = "0190000d-ca63-7d00-b64e-2dacddffffff"
         fake = tmp_path / "ig_x.png"
         fake.write_bytes(base64.b64decode(DUMMY_PNG_B64))
         monkeypatch.setattr("generate_image._find_latest_codex_image", lambda since: fake)
-        # ログ側には別物を置いておく(使われないはず)
+        # В лог кладём другое содержимое — оно не должно быть использовано
         sessions = tmp_path / "sessions"
         self._write_session_log(
             sessions,
@@ -919,7 +917,7 @@ class TestCodexSessionLogRecovery:
 
 
 class TestBackendDispatch:
-    """auto / api / codex 切替時に正しい経路に行くか"""
+    """Проверяет, что auto / api / codex уходят по правильному пути"""
 
     @patch("generate_image.subprocess.run")
     @patch("generate_image.OpenAI")
@@ -968,7 +966,7 @@ class TestBackendDispatch:
 
 
 class TestBackendFallback:
-    """Codex が失敗したら API にフォールバック(auto モードかつ key あり)"""
+    """При неудаче Codex происходит откат на API (режим auto и наличие ключа)"""
 
     @patch("generate_image.subprocess.run")
     @patch("generate_image.OpenAI")
@@ -977,6 +975,9 @@ class TestBackendFallback:
     ):
         monkeypatch.setattr("generate_image._codex_subscription_available", lambda: True)
         monkeypatch.setattr("generate_image._find_latest_codex_image", lambda since: None)
+        # Откат возможен только при заданном ключе. Без этой строки тест зависел бы
+        # от окружения машины и падал там, где ключа нет
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
         mock_run.return_value = Mock(returncode=1, stdout="", stderr="rate limit")
         client = Mock()
         mock_openai_cls.return_value = client
@@ -988,14 +989,14 @@ class TestBackendFallback:
         assert result is not None
         client.images.generate.assert_called_once()
         out = capsys.readouterr().out
-        assert "fallback" in out.lower() or "フォールバック" in out
+        assert "fallback" in out.lower() or "откат" in out.lower()
 
     @patch("generate_image.subprocess.run")
     @patch("generate_image.OpenAI")
     def test_explicit_codex_does_not_fallback(
         self, mock_openai_cls, mock_run, monkeypatch, tmp_path
     ):
-        """`--backend codex` 明示時はフォールバックしない(意図的選択を尊重)"""
+        """При явном `--backend codex` отката нет — осознанный выбор уважается"""
         monkeypatch.setattr("generate_image._find_latest_codex_image", lambda since: None)
         mock_run.return_value = Mock(returncode=1, stdout="", stderr="boom")
         result = generate_image(
@@ -1011,9 +1012,9 @@ class TestBackendFallback:
 
 
 class TestValidateSize:
-    """validate_size() の境界値挙動。4 制約(16 の倍数 / 最大辺 3840 / 3:1 / 総ピクセル)"""
+    """Граничные значения validate_size(): кратность 16, сторона 3840, 3:1, число пикселей"""
 
-    # --- 合格ケース ---
+    # --- Проходящие случаи ---
     def test_legacy_square_passes(self):
         assert validate_size("1024x1024") == (1024, 1024)
 
@@ -1024,21 +1025,21 @@ class TestValidateSize:
         assert validate_size("1536x1024") == (1536, 1024)
 
     def test_4k_landscape_upper_bound_passes(self):
-        """3840x2160 = 8,294,400 = 総ピクセル上限ちょうど"""
+        """3840x2160 = 8,294,400 — ровно верхняя граница по числу пикселей"""
         assert validate_size("3840x2160") == (3840, 2160)
 
     def test_4k_portrait_passes(self):
         assert validate_size("2160x3840") == (2160, 3840)
 
     def test_total_pixels_lower_bound_passes(self):
-        """1024x640 = 655,360 = 総ピクセル下限ちょうど"""
+        """1024x640 = 655,360 — ровно нижняя граница по числу пикселей"""
         assert validate_size("1024x640") == (1024, 640)
 
     def test_aspect_ratio_exactly_3to1_passes(self):
-        """3:1 ちょうどは許容(> 3.0 のみ弾く)。1536x512 = 3.0:1, total=786,432"""
+        """Ровно 3:1 допустимо, отсекается только > 3.0. 1536x512 = 3.0:1, всего 786,432"""
         assert validate_size("1536x512") == (1536, 512)
 
-    # --- 違反ケース ---
+    # --- Нарушающие случаи ---
     def test_non_wxh_format_raises(self):
         with pytest.raises(ValueError):
             validate_size("1024")
@@ -1061,22 +1062,22 @@ class TestValidateSize:
 
     def test_aspect_ratio_over_3to1_raises(self):
         """3840x1024 = 3.75:1"""
-        with pytest.raises(ValueError, match="3:1|アスペクト"):
+        with pytest.raises(ValueError, match="3:1|соотношение"):
             validate_size("3840x1024")
 
     def test_total_pixels_below_lower_bound_raises(self):
         """512x512 = 262,144 < 655,360"""
-        with pytest.raises(ValueError, match="655,360|総ピクセル"):
+        with pytest.raises(ValueError, match="655,360|пикс"):
             validate_size("512x512")
 
     def test_total_pixels_above_upper_bound_raises(self):
-        """3840x2176 = 8,355,840 > 8,294,400(16 の倍数・最大辺・比は OK)"""
-        with pytest.raises(ValueError, match="8,294,400|総ピクセル"):
+        """3840x2176 = 8,355,840 > 8,294,400 (кратность 16, сторона и пропорция в норме)"""
+        with pytest.raises(ValueError, match="8,294,400|пикс"):
             validate_size("3840x2176")
 
 
 class TestSizeFreeInputParsing:
-    """argparse が choices で弾かず、任意 WxH を受け取れること"""
+    """argparse не режет значения через choices и принимает произвольный WxH"""
 
     def test_arbitrary_size_accepted_by_parser(self):
         args = parse_args(["p", "--size", "3840x2160"])
@@ -1092,7 +1093,7 @@ class TestSizeFreeInputParsing:
 
 
 class TestSizeValidationIntegration:
-    """main() / generate_image() へのバリデーション統合"""
+    """Интеграция валидации в main() и generate_image()"""
 
     def _run_main(self, argv: list[str]) -> int | None:
         with patch.object(sys, "argv", ["generate_image.py", *argv]):
@@ -1130,24 +1131,24 @@ class TestSizeValidationIntegration:
             prompt="x", size="3840x2160", backend="codex", output_dir=str(tmp_path / "out")
         )
         out = capsys.readouterr().out
-        assert "Codex" in out and ("保証" in out or "warn" in out.lower())
+        assert "Codex" in out and ("не гарантирует" in out or "warn" in out.lower())
 
 
 # ---------------------------------------------------------------------------
-# ギャラリーストア (issue #024 / ccskill-gallery store-spec v1.0)
+# Галерея (issue #024 / ccskill-gallery store-spec v1.0)
 # ---------------------------------------------------------------------------
 
 
 class TestGalleryDir:
-    """ギャラリーストアのパス解決テスト"""
+    """Тесты определения пути к галерее"""
 
     def test_default_gallery_dir(self, monkeypatch):
-        """デフォルトは ~/.ccskill-gptimage/gallery"""
+        """По умолчанию — ~/.ccskill-gptimage/gallery"""
         monkeypatch.delenv(GALLERY_DIR_ENV, raising=False)
         assert get_gallery_dir() == Path.home() / ".ccskill-gptimage" / "gallery"
 
     def test_env_override(self, monkeypatch):
-        """環境変数でストアのパスを変更できる"""
+        """Путь к галерее меняется переменной окружения"""
         monkeypatch.setenv(GALLERY_DIR_ENV, "/custom/path/gallery")
         assert get_gallery_dir() == Path("/custom/path/gallery")
 
@@ -1164,14 +1165,14 @@ class TestOutputFormatToMime:
 
 
 class TestStoreInGallery:
-    """ギャラリーストア蓄積のテスト(store-spec v1.0 準拠)"""
+    """Тесты накопления в галерее (по store-spec v1.0)"""
 
     def _make_image(self, tmpdir: Path, name: str = "20260702_120000.png") -> Path:
         image_path = tmpdir / name
         image_path.write_bytes(b"fake-image-data")
         return image_path
 
-    def _meta(self, prompt="テスト") -> dict:
+    def _meta(self, prompt="тест") -> dict:
         return {
             "model": DEFAULT_MODEL,
             "prompt": prompt,
@@ -1190,7 +1191,7 @@ class TestStoreInGallery:
         }
 
     def test_image_and_sidecar_copied_to_store(self, tmp_path):
-        """画像とメタデータJSONがストアへコピーされる"""
+        """Картинка и JSON с метаданными копируются в галерею"""
         image_path = self._make_image(tmp_path)
         store_in_gallery(image_path, self._meta())
 
@@ -1201,9 +1202,9 @@ class TestStoreInGallery:
         assert (gallery / "images" / (image_path.name + ".json")).exists()
 
     def test_index_entry_has_required_keys(self, tmp_path):
-        """index.json のエントリに store-spec 必須キー(file/prompt/mime_type/timestamp)が揃う"""
+        """В записи index.json есть обязательные ключи store-spec: file/prompt/mime_type/timestamp"""
         image_path = self._make_image(tmp_path)
-        store_in_gallery(image_path, self._meta("夕焼け"))
+        store_in_gallery(image_path, self._meta("закат"))
 
         index = json.loads(
             (get_gallery_dir() / "index.json").read_text(encoding="utf-8")
@@ -1211,18 +1212,18 @@ class TestStoreInGallery:
         assert len(index["entries"]) == 1
         entry = index["entries"][0]
         assert entry["file"] == f"images/{image_path.name}"
-        assert entry["prompt"] == "夕焼け"
+        assert entry["prompt"] == "закат"
         assert entry["mime_type"] == "image/png"
         assert entry["timestamp"] == "2026-07-02T12:00:00"
         assert entry["model"] == DEFAULT_MODEL
         assert "project_dir" in entry
 
     def test_multiple_entries_accumulate(self, tmp_path):
-        """複数回の生成でエントリが蓄積される"""
+        """Записи накапливаются при повторных генерациях"""
         img1 = self._make_image(tmp_path, "20260702_120000.png")
         img2 = self._make_image(tmp_path, "20260702_120100.png")
-        store_in_gallery(img1, self._meta("1枚目"))
-        store_in_gallery(img2, self._meta("2枚目"))
+        store_in_gallery(img1, self._meta("первая"))
+        store_in_gallery(img2, self._meta("вторая"))
 
         index = json.loads(
             (get_gallery_dir() / "index.json").read_text(encoding="utf-8")
@@ -1230,7 +1231,7 @@ class TestStoreInGallery:
         assert len(index["entries"]) == 2
 
     def test_name_collision_gets_unique_name(self, tmp_path):
-        """同名ファイルが既にストアにある場合は一意な名前で保存される"""
+        """Если файл с таким именем уже есть, сохраняется под уникальным именем"""
         img = self._make_image(tmp_path)
         store_in_gallery(img, self._meta())
         store_in_gallery(img, self._meta())
@@ -1240,26 +1241,26 @@ class TestStoreInGallery:
         )
         assert len(index["entries"]) == 2
         files = [e["file"] for e in index["entries"]]
-        assert len(set(files)) == 2  # 重複しない
+        assert len(set(files)) == 2  # имена не повторяются
 
     def test_corrupt_index_rebuilt_from_sidecars(self, tmp_path):
-        """index.json 破損時はストア内のサイドカーから再構築される"""
+        """При повреждении index.json он пересобирается по сайдкарам в галерее"""
         img1 = self._make_image(tmp_path, "20260702_120000.png")
-        store_in_gallery(img1, self._meta("既存"))
+        store_in_gallery(img1, self._meta("старая"))
 
         index_path = get_gallery_dir() / "index.json"
         index_path.write_text("{ broken json", encoding="utf-8")
 
         img2 = self._make_image(tmp_path, "20260702_120100.png")
-        store_in_gallery(img2, self._meta("新規"))
+        store_in_gallery(img2, self._meta("новая"))
 
         index = json.loads(index_path.read_text(encoding="utf-8"))
         prompts = {e["prompt"] for e in index["entries"]}
-        assert prompts == {"既存", "新規"}
+        assert prompts == {"старая", "новая"}
 
 
 class TestGenerateImageStoresGallery:
-    """generate_image() がギャラリーへ蓄積するテスト(API/Codex 両経路)"""
+    """generate_image() складывает результат в галерею — оба пути, API и Codex"""
 
     @patch("generate_image.OpenAI")
     def test_api_backend_stores_to_gallery(self, mock_openai_cls, tmp_path):
@@ -1268,7 +1269,7 @@ class TestGenerateImageStoresGallery:
         client.images.generate.return_value = _make_image_response()
 
         result = generate_image(
-            prompt="蓄積テスト", output_dir=str(tmp_path / "out"), backend="api"
+            prompt="тест галереи", output_dir=str(tmp_path / "out"), backend="api"
         )
 
         assert result is not None
@@ -1276,7 +1277,7 @@ class TestGenerateImageStoresGallery:
         index = json.loads((gallery / "index.json").read_text(encoding="utf-8"))
         assert len(index["entries"]) == 1
         entry = index["entries"][0]
-        assert entry["prompt"] == "蓄積テスト"
+        assert entry["prompt"] == "тест галереи"
         assert entry["mime_type"] == "image/png"
         assert (gallery / entry["file"]).exists()
 
@@ -1288,19 +1289,19 @@ class TestGenerateImageStoresGallery:
         mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
 
         result = generate_image(
-            prompt="codex蓄積テスト", backend="codex", output_dir=str(tmp_path / "out")
+            prompt="codex тест галереи", backend="codex", output_dir=str(tmp_path / "out")
         )
 
         assert result is not None
         gallery = get_gallery_dir()
         index = json.loads((gallery / "index.json").read_text(encoding="utf-8"))
         assert len(index["entries"]) == 1
-        assert index["entries"][0]["prompt"] == "codex蓄積テスト"
+        assert index["entries"][0]["prompt"] == "codex тест галереи"
         assert index["entries"][0]["backend"] == "codex"
 
     @patch("generate_image.OpenAI")
     def test_store_failure_does_not_break_generation(self, mock_openai_cls, monkeypatch, tmp_path, capsys):
-        """ストアへの蓄積が失敗しても画像生成自体は成功として返る"""
+        """Сбой записи в галерею не отменяет успешную генерацию изображения"""
         client = Mock()
         mock_openai_cls.return_value = client
         client.images.generate.return_value = _make_image_response()
