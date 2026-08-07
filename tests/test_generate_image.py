@@ -738,6 +738,70 @@ class TestGenerateViaCodex:
         assert result is None
 
 
+class TestCodexResume:
+    """`--codex-resume` で `codex exec resume <ID>` に切り替わること(連作のスタイル継承)。"""
+
+    def _run_with_resume(self, mock_run, monkeypatch, tmp_path, resume):
+        fake = tmp_path / "ig_x.png"
+        fake.write_bytes(base64.b64decode(DUMMY_PNG_B64))
+        monkeypatch.setattr("generate_image._find_latest_codex_image", lambda since: fake)
+        mock_run.return_value = Mock(
+            returncode=0, stdout="session id: 019eeffd-ca63-7d00-b64e-2dacdd420385\n", stderr=""
+        )
+        result = generate_image(
+            prompt="slide 2",
+            backend="codex",
+            output_dir=str(tmp_path / "out"),
+            output_name="s2",
+            codex_resume=resume,
+        )
+        assert result is not None
+        return mock_run.call_args[0][0], result
+
+    @patch("generate_image.subprocess.run")
+    def test_resume_uses_exec_resume_subcommand(self, mock_run, monkeypatch, tmp_path):
+        sid = "019eeffd-ca63-7d00-b64e-2dacdd420385"
+        cmd, _ = self._run_with_resume(mock_run, monkeypatch, tmp_path, sid)
+        assert cmd[1] == "exec"
+        assert cmd[2] == "resume"
+        # SESSION_ID は PROMPT(`-`)より前の positional
+        assert cmd.index(sid) < cmd.index("-")
+
+    @patch("generate_image.subprocess.run")
+    def test_resume_does_not_pass_sandbox_flag(self, mock_run, monkeypatch, tmp_path):
+        """`codex exec resume` に --sandbox は存在しない(codex-cli 0.146.1 で確認)。
+        渡すと unknown argument で落ちるので、絶対に付けないこと。"""
+        cmd, _ = self._run_with_resume(
+            mock_run, monkeypatch, tmp_path, "019eeffd-ca63-7d00-b64e-2dacdd420385"
+        )
+        assert "--sandbox" not in cmd
+
+    @patch("generate_image.subprocess.run")
+    def test_without_resume_keeps_plain_exec_with_sandbox(self, mock_run, monkeypatch, tmp_path):
+        cmd, _ = self._run_with_resume(mock_run, monkeypatch, tmp_path, None)
+        assert "resume" not in cmd
+        assert "--sandbox" in cmd
+
+    @patch("generate_image.subprocess.run")
+    def test_resume_adds_style_continuity_directive_to_prompt(
+        self, mock_run, monkeypatch, tmp_path
+    ):
+        """スタイルだけ継承し構図は複製させない指示が stdin プロンプトに入ること。"""
+        self._run_with_resume(
+            mock_run, monkeypatch, tmp_path, "019eeffd-ca63-7d00-b64e-2dacdd420385"
+        )
+        sent = mock_run.call_args.kwargs["input"]
+        assert "同じビジュアルスタイル" in sent
+        assert "構図・被写体・テキストは複製せず" in sent
+
+    @patch("generate_image.subprocess.run")
+    def test_session_id_recorded_in_metadata(self, mock_run, monkeypatch, tmp_path):
+        sid = "019eeffd-ca63-7d00-b64e-2dacdd420385"
+        _, result = self._run_with_resume(mock_run, monkeypatch, tmp_path, sid)
+        meta = json.loads(Path(result + ".json").read_text(encoding="utf-8"))
+        assert meta["codex_session_id"] == sid
+
+
 class TestCodexSessionLogRecovery:
     """新しい Codex (codex exec が画像をファイル化せず、セッションログに inline base64 で返す)
     への対応。ファイルが見つからないとき、ログから b64 を回収してデコード保存できること。"""

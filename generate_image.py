@@ -236,6 +236,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             " 失敗時は OPENAI_API_KEY があれば api にフォールバック。"
         ),
     )
+    parser.add_argument(
+        "--codex-resume",
+        dest="codex_resume",
+        type=str,
+        default=None,
+        help=(
+            "既存の Codex セッション ID を指定して `codex exec resume` で継続する。"
+            " 直前に生成した画像が同じスレッドに残るため、連作のスタイルを引き継げる。"
+            " セッション ID は各実行が出力する `[Session] <id>` から取得する。"
+            " backend=codex のときのみ有効"
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -305,6 +317,20 @@ def _extract_codex_session_id(stdout: str) -> str | None:
     if not stdout:
         return None
     m = re.search(r"session id:\s*([0-9a-fA-F][0-9a-fA-F-]{7,})", stdout)
+    return m.group(1) if m else None
+
+
+def _session_id_from_log_path(log_path: Path) -> str | None:
+    """`rollout-<ts>-<uuid>.jsonl` というファイル名から session id を取り出す。
+
+    codex-cli 0.146.1 の `codex exec` は stdout に `session id:` ヘッダを出さない
+    (2026-08-07 実測)。継続用 ID の回収経路は実質これだけなので、
+    `_extract_codex_session_id()` が空を返したときのフォールバックとして使う。
+    """
+    m = re.search(
+        r"rollout-\d{4}-\d{2}-\d{2}T[\d-]+-([0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})",
+        log_path.name,
+    )
     return m.group(1) if m else None
 
 
@@ -386,6 +412,7 @@ def _build_codex_prompt(
     output_format: str,
     background: str,
     reference_count: int,
+    resume: bool = False,
 ) -> str:
     """Codex agent への指示プロンプトを組み立てる。
 
@@ -408,6 +435,14 @@ def _build_codex_prompt(
             f"添付された {reference_count} 枚の参照画像をベースに edit モードで生成してください。"
             " 元画像の主要要素(人物の顔・構図・背景など)はできる限り保持してください。"
         )
+    if resume:
+        # 継承させたいのはスタイルだけで、構図まで複製されると連作にならない。
+        # 「同じ雰囲気で」だけでは前スライドの再描画になりやすいので明示的に切り分ける。
+        lines.append(
+            "このスレッドで直前に生成した画像と同じビジュアルスタイル"
+            "(配色・グラデーション・書体・装飾の質感・フレーム処理)を維持してください。"
+            " ただし構図・被写体・テキストは複製せず、以下のプロンプトに従って新規に描いてください。"
+        )
     lines.append("")
     lines.append("プロンプト:")
     lines.append(prompt)
@@ -423,8 +458,9 @@ def _generate_via_codex(
     background: str,
     output_path: Path,
     reference_images: list[str] | None,
-) -> tuple[Path, str | None] | None:
-    """Codex CLI 経由で画像生成。成功時は (output_path, revised_prompt) を返す。失敗時 None。
+    resume_session_id: str | None = None,
+) -> tuple[Path, str | None, str | None] | None:
+    """Codex CLI 経由で画像生成。成功時は (output_path, revised_prompt, session_id) を返す。失敗時 None。
 
     失敗の原因は subprocess エラー / image_gen 出力なし / コピー失敗 など。
     呼び出し側はこれを見て auto モードなら API へフォールバックできる。
@@ -436,23 +472,40 @@ def _generate_via_codex(
         output_format=output_format,
         background=background,
         reference_count=len(reference_images or []),
+        resume=bool(resume_session_id),
     )
-    cmd: list[str] = [
-        # Windows: npm ставит шим codex.CMD, а CreateProcess не подставляет
-        # расширения из PATHEXT — голое "codex" даёт FileNotFoundError.
-        # shutil.which находит .CMD корректно, поэтому резолвим путь заранее.
-        shutil.which("codex") or "codex",
-        "exec",
-        "--skip-git-repo-check",
-        "--sandbox",
-        "workspace-write",
-        # Windows: многострочный промпт, переданный позиционным аргументом,
-        # обрезается на первом переносе строки — вызов идёт через batch-шим
-        # codex.CMD, а cmd.exe трактует перенос как конец команды. В логе сессии
-        # это видно как user_message из одной первой строки. `-` переключает
-        # codex exec на чтение промпта из stdin, где переносы безопасны.
-        "-",
-    ]
+    # Windows: npm ставит шим codex.CMD, а CreateProcess не подставляет
+    # расширения из PATHEXT — голое "codex" даёт FileNotFoundError.
+    # shutil.which находит .CMD корректно, поэтому резолвим путь заранее.
+    codex_bin = shutil.which("codex") or "codex"
+    # Windows: многострочный промпт, переданный позиционным аргументом,
+    # обрезается на первом переносе строки — вызов идёт через batch-шим
+    # codex.CMD, а cmd.exe трактует перенос как конец команды. В логе сессии
+    # это видно как user_message из одной первой строки. `-` переключает
+    # codex exec на чтение промпта из stdin, где переносы безопасны.
+    if resume_session_id:
+        # `codex exec resume [SESSION_ID] [PROMPT]` — у подкоманды resume нет
+        # флага --sandbox (проверено на codex-cli 0.146.1), политика песочницы
+        # наследуется из возобновляемой сессии. `--last` сознательно не
+        # поддерживаем: первый позиционный аргумент — SESSION_ID, и `-` при
+        # `--last` может быть съеден как id вместо промпта.
+        cmd: list[str] = [
+            codex_bin,
+            "exec",
+            "resume",
+            "--skip-git-repo-check",
+            resume_session_id,
+            "-",
+        ]
+    else:
+        cmd = [
+            codex_bin,
+            "exec",
+            "--skip-git-repo-check",
+            "--sandbox",
+            "workspace-write",
+            "-",
+        ]
     # `-i` は variadic なので必ず prompt の後に置く(逆だと prompt まで画像として食われる)
     for ref in reference_images or []:
         cmd.extend(["-i", ref])
@@ -482,23 +535,32 @@ def _generate_via_codex(
 
     revised = _extract_revised_prompt_from_codex_log(proc.stdout)
 
+    # セッション ID は画像の回収経路に関係なく必要(呼び出し側が次スライドの
+    # --codex-resume に渡して連作のスタイルを引き継ぐ)。
+    # 0.146.1 の stdout にはヘッダが無いので、実際はログのファイル名から回収する。
+    # それも取れなければ、resume 中なら渡された ID をそのまま引き継ぐ。
+    session_id = _extract_codex_session_id(proc.stdout)
+    log_path = _find_codex_session_log(session_id, started_at)
+    if session_id is None and log_path is not None:
+        session_id = _session_id_from_log_path(log_path)
+    if session_id is None:
+        session_id = resume_session_id
+
     # 旧 Codex: 画像は ~/.codex/generated_images/<session>/ig_*.png にファイル出力される
     image = _find_latest_codex_image(started_at)
     if image is not None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(image, output_path)
-        return (output_path, revised)
+        return (output_path, revised, session_id)
 
     # 新 Codex (>= 2026-06 頃): codex exec は画像をファイル化せず、セッションログ内に
     # inline base64 で返す。ログから回収してデコード保存する。
-    session_id = _extract_codex_session_id(proc.stdout)
-    log_path = _find_codex_session_log(session_id, started_at)
     if log_path is not None:
         data = _recover_codex_image_from_session(log_path)
         if data:
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_bytes(data)
-            return (output_path, revised)
+            return (output_path, revised, session_id)
 
     print("[Error] Codex 経由で生成された画像が見つかりませんでした")
     return None
@@ -674,6 +736,7 @@ def generate_image(
     input_fidelity: str | None = None,
     output_name: str | None = None,
     backend: str = DEFAULT_BACKEND,
+    codex_resume: str | None = None,
 ) -> str | None:
     """gpt-image-2 で画像を生成し、ファイルパスを返す。失敗時は None。
 
@@ -728,11 +791,15 @@ def generate_image(
             background=background,
             output_path=output_path,
             reference_images=reference_images,
+            resume_session_id=codex_resume,
         )
         if codex_result is not None:
-            saved_path, revised = codex_result
+            saved_path, revised, session_id = codex_result
             if revised:
                 print(f"[Revised] {revised}")
+            if session_id:
+                # 次スライドはこれを --codex-resume に渡してスタイルを継承する
+                print(f"[Session] {session_id}")
             print(f"[Success] 画像を保存しました (backend=codex): {saved_path}")
             meta = _build_meta(
                 model=model,
@@ -747,6 +814,7 @@ def generate_image(
                 input_fidelity=input_fidelity,
                 revised=revised,
                 backend="codex",
+                codex_session_id=session_id,
             )
             _save_metadata(saved_path, meta)
             try:
@@ -845,6 +913,7 @@ def _build_meta(
     input_fidelity: str | None,
     revised: str | None,
     backend: str,
+    codex_session_id: str | None = None,
 ) -> dict:
     return {
         "model": model,
@@ -860,6 +929,7 @@ def _build_meta(
         "input_fidelity": input_fidelity,
         "revised_prompt": revised,
         "backend": backend,
+        "codex_session_id": codex_session_id,
         "timestamp": datetime.now().isoformat(),
     }
 
@@ -870,6 +940,9 @@ def main():
     if args.mask and not args.reference:
         print("[Error] --mask は --reference と併用してください")
         sys.exit(1)
+    if args.codex_resume and args.backend == "api":
+        print("[Error] --codex-resume は --backend api では使用できません(Codex 専用)")
+        sys.exit(2)
     if args.background == "transparent" and not args.model.startswith("gpt-image-1"):
         print(
             f"[Error] {args.model} は --background transparent をサポートしていません。"
@@ -908,6 +981,7 @@ def main():
             input_fidelity=args.input_fidelity,
             output_name=args.output_name,
             backend=args.backend,
+            codex_resume=args.codex_resume,
         )
         if result is None:
             sys.exit(1)
