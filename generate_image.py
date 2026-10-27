@@ -79,6 +79,12 @@ CODEX_AUTH_FILE = CODEX_HOME / "auth.json"
 CODEX_GENERATED_DIR = CODEX_HOME / "generated_images"
 CODEX_SESSIONS_DIR = CODEX_HOME / "sessions"
 CODEX_SUBPROCESS_TIMEOUT = 300
+# Модель агента Codex для этого вызова, мимо ~/.codex/config.toml. Конфиг общий
+# с Codex Desktop, и 26.10.2026 приложение (0.164) прописало туда gpt-6.1-sol,
+# которую codex-cli 0.146.1 с ChatGPT-аккаунтом не принимает: 400 model_not_found,
+# и exec завершается без единого ответа. Переменная задаёт `-m` только нашему
+# вызову, настройки приложения остаются как есть.
+CODEX_MODEL_ENV = "CCSKILL_GPTIMAGE_CODEX_MODEL"
 
 # Пропорция на бэкенде codex: у встроенного инструмента image_gen нет параметра
 # размера (схема — только prompt / num_last_images_to_include /
@@ -544,6 +550,12 @@ def _generate_via_codex(
             "workspace-write",
             "-",
         ]
+    codex_model = os.environ.get(CODEX_MODEL_ENV)
+    if codex_model:
+        # `-m` есть и у `exec`, и у `exec resume`; ставим среди флагов, до
+        # позиционных SESSION_ID и `-`, чтобы их порядок не менялся
+        at = cmd.index("--skip-git-repo-check") + 1
+        cmd[at:at] = ["-m", codex_model]
     # `-i` — variadic-флаг, поэтому его место строго после промпта:
     # в обратном порядке он съест и сам промпт, приняв его за путь к картинке
     for ref in reference_images or []:

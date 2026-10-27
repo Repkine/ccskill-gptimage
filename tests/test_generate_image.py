@@ -799,6 +799,43 @@ class TestCodexResume:
         assert meta["codex_session_id"] == sid
 
 
+class TestCodexModelOverride:
+    """CCSKILL_GPTIMAGE_CODEX_MODEL задаёт `-m` нашему вызову мимо общего config.toml:
+    Codex Desktop пишет туда модель, которую codex-cli 0.146.1 не принимает."""
+
+    def _cmd(self, mock_run, monkeypatch, tmp_path, resume):
+        fake = tmp_path / "ig_x.png"
+        fake.write_bytes(base64.b64decode(DUMMY_PNG_B64))
+        monkeypatch.setattr("generate_image._find_latest_codex_image", lambda since: fake)
+        mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
+        generate_image(
+            prompt="x", backend="codex", output_dir=str(tmp_path / "out"),
+            output_name="m", codex_resume=resume,
+        )
+        return mock_run.call_args[0][0]
+
+    @patch("generate_image.subprocess.run")
+    def test_no_env_no_model_flag(self, mock_run, monkeypatch, tmp_path):
+        from generate_image import CODEX_MODEL_ENV
+
+        monkeypatch.delenv(CODEX_MODEL_ENV, raising=False)
+        assert "-m" not in self._cmd(mock_run, monkeypatch, tmp_path, None)
+
+    @patch("generate_image.subprocess.run")
+    def test_env_adds_model_before_positionals(self, mock_run, monkeypatch, tmp_path):
+        from generate_image import CODEX_MODEL_ENV
+
+        monkeypatch.setenv(CODEX_MODEL_ENV, "gpt-5.6-sol")
+        sid = "019eeffd-ca63-7d00-b64e-2dacdd420385"
+        for resume in (None, sid):
+            cmd = self._cmd(mock_run, monkeypatch, tmp_path, resume)
+            m = cmd.index("-m")
+            assert cmd[m + 1] == "gpt-5.6-sol"
+            assert m < cmd.index("-")
+            if resume:
+                assert m < cmd.index(sid)
+
+
 class TestCodexAspectRetry:
     """Пропорция на бэкенде codex: у встроенного image_gen нет параметра размера,
     поэтому кадр сверяется по факту и при промахе генерируется заново."""
